@@ -1,0 +1,2189 @@
+#! /bin/bash -x
+
+export BOMSI_LIB_CONF_RELEASE="Kilo"
+export BOMSI_LIB_CONF_VERSION="0.1"
+##
+## This file contains the core of BOMSI
+## the functions that allow to install OpenStack with a simple command
+##
+##
+bomsi_lib_conf_version () { 
+  echo "bomsi_lib_conf version: $BOMSI_LIB_CONF_RELEASE $BOMSI_LIB_CONF_VERSION" 
+}
+
+
+if [ -e bomsi_vars ]; then
+. bomsi_vars
+fi
+
+
+## Copy scripts and execute them on a remote machine
+rcopy_execute () {
+  ## Usage: rcopy_execute TARGET_IP "Commands to execute remotely"
+  cat bomsi_lib_vm | sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$1 "cat > /tmp/bomsi_lib_vm "
+  cat bomsi_vars | sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$1 "cat > /tmp/bomsi_vars "
+  cat susti.py | sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$1 "cat > /tmp/susti ; chmod 755 /tmp/susti"
+  cat bomsi_lib_conf | sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$1 "cat > /tmp/bomsi_lib_conf ; chmod 755 /tmp/bomsi_lib_conf  ; . /tmp/bomsi_{vars,lib_*}; $2" 
+}
+
+
+print_title (){
+echo -e "\n   ################### \n   #" $1 "# \n   ################### \n"
+}
+
+
+# usage: last_step INT description_of_the_step
+last_step(){
+   echo "Completed until: " $1 $2 |tee -a last_step
+   export LAST_STEP=$1
+}
+export -f last_step
+
+if [ -f last_step ]; then
+ export LAST_STEP=`tail -1 last_step | awk '{print $3}'`
+else
+ export LAST_STEP=0
+fi
+
+
+#Function to install ssh-keys
+#usage: install-ssh-keys $ROOT_PASSWORD $REMOTE_IP
+install-ssh-keys(){
+  if [ ! -f ~/.ssh/id_rsa.pub ]; then
+    echo "Creating ssh keys on local machine ($HOSTNAME)."
+    ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+  fi
+
+   ssh-keygen -f "~/.ssh/known_hosts" -R $2
+   sshpass -p $1 ssh-copy-id root@$2
+#  sshpass -p $1 ssh -o 'StrictHostKeyChecking no' root@$2 'if [ ! -d ~/.ssh ]; then mkdir .ssh ; fi '
+#  sshpass -p $1 scp ~/.ssh/id_rsa.pub root@$2:~/.ssh/authorized_keys
+  echo "ssh keys installed"
+}
+
+
+selinux_firewall_off () {
+  print_title "Disabling SELinux and the Firewall on " $HOSTNAME
+
+  systemctl stop firewalld.service
+  systemctl disable firewalld.service
+  sed -i 's/enforcing/disabled/g' /etc/selinux/config
+  echo 0 > /sys/fs/selinux/enforce
+  setenforce 0
+}
+
+host_exists () {
+ ##  Usage: host_exists VM_NAME IP
+
+ ping -w 1 -c 1 10.0.0.12 2>&1 > /dev/null  || \
+ virsh domstate $VM_PREF-controlle > /dev/null 2>&1 || \
+ echo "yes"
+}
+
+
+## Function bunddles for each machine
+
+controller_bund () {
+ ## This function is just a bunddle of installer functions, for a cleaner code
+ . /tmp/bomsi_{vars,lib_*}
+
+  mysqld_rabbitmq &> /tmp/C01.inst_rabbit.log
+  install_keystone &> /tmp/C02.inst_keystone.log
+  install_glance &> /tmp/C03.inst_glance.log
+  install_nova_controller &> /tmp/A04.inst_nova_controller.log
+  install_neutron_controller &> /tmp/A05.inst_neutron_controller.log
+  install_horizon &> /tmp/A06.inst_horizon.log 
+
+  while ! nova service-list |grep nova-compute ; do sleep 2 && echo 'waiting for compute1 node' ; done && \
+      check_compute > /root/check_compute.log &
+
+  install_neutron_node_meta_nova &> /tmp/C07.install_neutron_node_meta 
+  check_openvswitch &> /tmp/C08.check_openvswitch.log 
+  create_neutron_networks &> /tmp/C09.create_neutron_netw.log
+      
+}
+
+
+
+
+
+
+
+
+
+
+
+basic_packages (){
+ . /tmp/bomsi_vars
+
+ # deltarpm for updating instead of downloading
+ rpm -qa | grep -qw deltarpm || \
+   yum -y install deltarpm \
+   yum provides '*/applydeltarpm'
+
+
+ rpm -qa | grep -qw ntp || \
+   yum -y install ntp && \
+   unalias cp &> /dev/null && \
+   cp /etc/ntp.conf /etc/ntp.conf.BK && \
+   echo "server controller iburst" > /etc/ntp.conf && \
+   systemctl enable ntpd.service && \
+   systemctl start ntpd.service 
+
+ #prerequisites 
+ rpm -qa | grep -qw yum-plugin-priorities || \
+   yum -y install yum-plugin-priorities yum-utils
+ rpm -qa | grep -qw epel-release || \
+   yum -y install http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
+ rpm -qa | grep -qw rdo-release-kilo || \
+   yum -y install http://rdo.fedorapeople.org/openstack-kilo/rdo-release-kilo.rpm
+ yum -y upgrade
+
+ rpm -qa | grep -qw openstack-selinux || \
+   yum -y install openstack-selinux
+
+
+ rpm -qa | grep -qw rpmforge-release || \
+    rpm --import http://apt.sw.be/RPM-GPG-KEY.dag.txt 
+ rpm -qa | grep -qw rpmforge-release || \
+    yum-config-manager rpmforge | grep gpgkey 
+ rpm -qa | grep -qw rpmforge-release || \
+    rpm -Uvh http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm 
+
+ rpm -qa | grep -qw htop || \
+   yum -y install htop
+ rpm -qa | grep -qw net-tools || \
+   yum -y install net-tools  #containing ifconfig and route
+ rpm -qa |grep selinux-policy || \
+   yum -y install selinux-policy policycoreutils-python
+ 
+  #checking for SELinux blocked stuff later on
+  #ausearch -m avc -ts today | audit2why
+}
+
+
+
+
+
+
+
+
+mysqld_rabbitmq (){
+ . /tmp/bomsi_vars
+
+#disable firewall in controller
+selinux_firewall_off
+
+    cat > /etc/ntp.conf << EOF
+restrict -4 default kod notrap nomodify
+restrict -6 default kod notrap nomodify
+server ntp1.dkrz.de iburst
+server ntp2.dkrz.de iburst
+server 0.centos.pool.ntp.org iburst
+server 1.centos.pool.ntp.org iburst
+#disable monitor
+EOF
+  systemctl enable ntpd.service
+  systemctl restart ntpd.service
+
+ yum -y install mariadb mariadb-server MySQL-python
+    
+  #Add keys to enable UTF-8
+  cp /etc/my.cnf /etc/my.cnf.bk
+
+  export TMPF="/etc/my.cnf"
+  susti $TMPF mysqld "bind-address = ${CONTROLLER_IP}"
+  susti $TMPF mysqld "default-storage-engine = innodb"
+  susti $TMPF mysqld "innodb_file_per_table"
+  susti $TMPF mysqld "collation-server = utf8_general_ci"
+  susti $TMPF mysqld "init-connect = 'SET NAMES utf8'"
+  susti $TMPF mysqld "character-set-server = utf8"
+
+  systemctl enable mariadb.service
+  systemctl start mariadb.service
+
+  # Automated MySQL secure instalation
+  mysql -u root <<-EOF
+UPDATE mysql.user SET Password=PASSWORD('$MYSQL_ROOT') WHERE User='root';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';
+FLUSH PRIVILEGES;
+EOF
+ 
+  yum -y install rabbitmq-server librabbitmq-tools
+  rabbitmq-plugins enable rabbitmq_management
+  chown -R rabbitmq:rabbitmq /var/lib/rabbitmq/
+   # start server by /usr/sbin/rabbitmq-server
+   # rabbitmqctl add_user mqadmin mqadmin
+   # rabbitmqctl set_user_tags mqadmin administrator
+   # rabbitmqctl set_permissions -p / mqadmin ".*" ".*" ".*"
+      #interface at: http://host:15672/
+        #http://m41highway.wordpress.com/2014/09/19/install-rabbit-mq-3-3-on-centos-7/
+
+  systemctl enable rabbitmq-server.service
+  systemctl start rabbitmq-server.service
+  systemctl restart rabbitmq-server.service  # otherwise it doesn't work
+  
+  rabbitmqctl change_password guest $RABBIT_PASS
+
+  rabbitmqctl add_user openstack $RABBIT_PASS
+  rabbitmqctl set_permissions openstack ".*" ".*" ".*" 
+
+  # check:
+  #   rabbitmqctl status
+  #   rabbitmqctl cluster_status
+  #   rabbitmqctl list_connections
+  #   rabbitmqctl list_queues |grep -v "0$"
+  #   grep -i alarm /var/log/rabbitmq/* 
+}
+
+
+rabbit_parameters () {
+  ## Usage: rabbit_paramters CONFIG_FILE
+ . /tmp/bomsi_vars
+
+  TMPF=$1
+  susti $TMPF DEFAULT "rpc_backend = rabbit"
+  susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+  susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+  susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+
+}
+
+
+
+keystone_parameters () {
+  ## Usage: keystone_parameters CONFIG_FILE USER PASSWORD
+  . /tmp/bomsi_vars
+  TMPF=$1
+
+     susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+     susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+     susti $TMPF keystone_authtoken "auth_plugin = password"
+     susti $TMPF keystone_authtoken "project_domain_id = default"
+     susti $TMPF keystone_authtoken "user_domain_id = default"
+     susti $TMPF keystone_authtoken "project_name = service"
+     susti $TMPF keystone_authtoken "username = $2"
+     susti $TMPF keystone_authtoken "password = $3"
+
+}
+
+
+create_sql_user () {
+ 
+. /tmp/bomsi_vars
+
+   mysql -u root -p$MYSQL_ROOT <<-EOF
+CREATE DATABASE $1;
+GRANT ALL PRIVILEGES ON $1.* TO '$1'@'localhost' \
+  IDENTIFIED BY '$2';
+GRANT ALL PRIVILEGES ON $1.* TO '$1'@'%' \
+  IDENTIFIED BY '$2';
+EOF
+
+}
+
+
+install_keystone (){
+
+ . /tmp/bomsi_{vars,lib_conf}
+ #. /tmp/bomsi_vars
+ #. /tmp/bomsi_lib_conf
+
+  ## Create the MySQL/MariaDB user for keystone
+  create_sql_user keystone $KEYSTONE_DB_PASSWORD
+ 
+  ## Install the packages for keystone
+  yum -y install openstack-keystone httpd mod_wsgi python-openstackclient memcached python-memcached
+
+  ## Start the memcached service
+  systemctl enable memcached.service
+  systemctl start memcached.service
+
+  ## Generate an admin token and copy it into the variables file and to the home directory (just in case)
+  if [ ! $ADMIN_TOKEN ]; then
+    export ADMIN_TOKEN=$(openssl rand -hex 10 |tee token_admin)
+    echo "export ADMIN_TOKEN=\"$ADMIN_TOKEN\" " >> /tmp/bomsi_vars 
+    #echo "$NETSTAT" |grep memcached |grep 11211 > /dev/null && echo "memcached: OK"|| echo "memcached: ERROR not listening on port 11211"
+    echo $ADMIN_TOKEN > ~/token_admin
+  fi
+
+  ## Edit the config file of keystone
+  TMPF="/etc/keystone/keystone.conf"
+  susti $TMPF DEFAULT   "admin_token =   ${ADMIN_TOKEN}"
+  susti $TMPF DEFAULT   "verbose=True"
+  susti $TMPF memcache   "servers = localhost:11211"
+  susti $TMPF database  "connection=mysql://keystone:${KEYSTONE_DB_PASSWORD}@localhost/keystone"
+  susti $TMPF token     "provider= keystone.token.providers.uuid.Provider"
+  susti $TMPF token     "driver=keystone.token.persistence.backends.memcache.Token"
+  susti $TMPF revoke   "driver = keystone.contrib.revoke.backends.sql.Revoke"
+
+
+  # Create generic certificates
+ # keystone-manage pki_setup --keystone-user keystone --keystone-group keystone
+ # chown -R keystone:keystone /var/log/keystone
+ # chown -R keystone:keystone /etc/keystone/ssl
+ # chmod -R o-rwx /etc/keystone/ssl
+
+  echo "  Populate keystone database"
+  su -s /bin/sh -c "keystone-manage db_sync" keystone
+
+
+
+cat > /etc/httpd/conf.d/wsgi-keystone.conf <<EOF
+Listen 5000
+Listen 35357
+ServerName controller
+
+<VirtualHost *:5000>
+    WSGIDaemonProcess keystone-public processes=5 threads=1 user=keystone group=keystone display-name=%{GROUP}
+    WSGIProcessGroup keystone-public
+    WSGIScriptAlias / /var/www/cgi-bin/keystone/main
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIPassAuthorization On
+    LogLevel info
+    ErrorLogFormat "%{cu}t %M"
+    ErrorLog /var/log/httpd/keystone-error.log
+    CustomLog /var/log/httpd/keystone-access.log combined
+</VirtualHost>
+
+<VirtualHost *:35357>
+    WSGIDaemonProcess keystone-admin processes=5 threads=1 user=keystone group=keystone display-name=%{GROUP}
+    WSGIProcessGroup keystone-admin
+    WSGIScriptAlias / /var/www/cgi-bin/keystone/admin
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIPassAuthorization On
+    LogLevel info
+    ErrorLogFormat "%{cu}t %M"
+    ErrorLog /var/log/httpd/keystone-error.log
+    CustomLog /var/log/httpd/keystone-access.log combined
+</VirtualHost>
+EOF
+
+  mkdir -p /var/www/cgi-bin/keystone
+  
+  ## if file is available localy just copy it instead of download
+  if [ -f /root/LocalRepo/Packages/keystone.py ]; then
+     echo "keystone package copied, not downloaded" > /root/keystone-not-dl
+     cp /root/LocalRepo/Packages/keystone.py /var/www/cgi-bin/keystone/main
+     cp /root/LocalRepo/Packages/keystone.py /var/www/cgi-bin/keystone/admin
+  else
+     curl http://git.openstack.org/cgit/openstack/keystone/plain/httpd/keystone.py?h=stable/kilo \
+     | tee /var/www/cgi-bin/keystone/main /var/www/cgi-bin/keystone/admin
+  fi
+
+  chown -R keystone:keystone /var/www/cgi-bin/keystone
+  chmod 755 /var/www/cgi-bin/keystone/*
+
+  systemctl enable httpd.service
+  systemctl start httpd.service
+
+
+
+  #systemctl enable openstack-keystone.service
+  #systemctl start openstack-keystone.service
+
+  #Cron to purge expired tokens hourly
+  (crontab -l -u keystone 2>&1 | grep -q token_flush) || \
+    echo '@hourly /usr/bin/keystone-manage token_flush >/var/log/keystone/keystone-tokenflush.log 2>&1' \
+    >> /var/spool/cron/keystone
+
+
+  ## Create the service and endpoint for keystone as well as the default project, users (admin,demo) and roles
+  export OS_TOKEN=$ADMIN_TOKEN
+  export OS_URL=http://controller:35357/v2.0
+
+  openstack service create \
+  --name keystone --description "OpenStack Identity" identity
+
+   openstack endpoint create \
+  --publicurl http://controller:5000/v2.0 \
+  --internalurl http://controller:5000/v2.0 \
+  --adminurl http://controller:35357/v2.0 \
+  --region RegionOne \
+  identity
+
+
+  openstack project create --description "Admin Project" admin
+  openstack user create --password $KEYSTONE_ADMIN_PASSWORD admin --email admin@os.dkrz.de
+
+
+  openstack role create admin
+  openstack role add --project admin --user admin admin
+  openstack project create --description "Service Project" service
+
+  openstack project create --description "Demo Project" demo
+
+  openstack user create --password $KEYSTONE_DEMO_PASSWORD demo --email demo@os.dkrz.de
+  openstack role create user
+  openstack role add --project demo --user demo user
+
+
+
+
+  # Create the Keystone credentials file in the home directory
+cat > /root/admin-openrc.sh << EOF
+export OS_PROJECT_DOMAIN_ID=default
+export OS_USER_DOMAIN_ID=default
+export OS_PROJECT_NAME=admin
+export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=$KEYSTONE_ADMIN_PASSWORD
+export OS_AUTH_URL=http://controller:35357/v3
+export OS_REGION_NAME=RegionOne
+EOF
+
+cat > ~/demo-openrc.sh << EOF
+export OS_PROJECT_DOMAIN_ID=default
+export OS_USER_DOMAIN_ID=default
+export OS_PROJECT_NAME=demo
+export OS_TENANT_NAME=demo
+export OS_USERNAME=demo
+export OS_PASSWORD=$KEYSTONE_DEMO_PASSWORD
+export OS_AUTH_URL=http://controller:35357/v3
+export OS_REGION_NAME=RegionOne
+EOF
+
+
+#unset OS_TOKEN OS_URL
+#
+#openstack --os-auth-url http://controller:35357 \
+#  --os-project-name admin --os-username admin --os-auth-type password \
+#  token issue
+#
+#openstack --os-auth-url http://controller:35357 \
+#  --os-project-name admin --os-username admin --os-auth-type password \
+#  project list
+
+#openstack --os-auth-url http://controller:35357 \
+#  --os-project-domain-id default --os-user-domain-id default \
+#  --os-project-name admin --os-username admin --os-auth-type password \
+#  token issue
+
+
+}
+
+
+
+
+
+install_glance (){
+
+ . /tmp/bomsi_{vars,lib_conf}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_conf
+ . ~/admin-openrc.sh
+
+### Glance
+
+  ## Create the MySQL/MariaDB user for glance
+  create_sql_user glance $GLANCE_DB_PASSWORD
+
+  ## Create the keystone user, role and endpoint for glance
+  openstack user create --password $GLANCE_PASSWORD --email glance@os.dkrz.de glance
+  openstack role add --project service --user glance admin
+
+  openstack service create --name glance \
+  --description "OpenStack Image service" image
+
+   openstack endpoint create \
+  --publicurl http://controller:9292 \
+  --internalurl http://controller:9292 \
+  --adminurl http://controller:9292 \
+  --region RegionOne \
+  image
+
+  ## Install the packages for glance
+  yum -y install openstack-glance python-glance python-glanceclient
+
+  ## Edit the configuration file for glance
+  for TMPF in /etc/glance/glance-api.conf /etc/glance/glance-registry.conf
+   do
+     susti $TMPF database   "connection=mysql://glance:${GLANCE_DB_PASSWORD}@controller/glance" 
+     susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+     susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+     susti $TMPF keystone_authtoken "auth_plugin = password"
+     susti $TMPF keystone_authtoken "project_domain_id = default"
+     susti $TMPF keystone_authtoken "user_domain_id = default"
+     susti $TMPF keystone_authtoken "project_name = service"
+     susti $TMPF keystone_authtoken "username = glance"
+     susti $TMPF keystone_authtoken "password = $GLANCE_PASSWORD"
+     susti $TMPF paste_deploy "flavor = keystone"
+    
+     susti $TMPF glance_store "default_store = file"
+     susti $TMPF glance_store "filesystem_store_datadir = /var/lib/glance/images/"
+     susti $TMPF DEFAULT "notification_driver = noop"
+     susti $TMPF DEFAULT "verbose = True"
+     
+   done
+
+  su -s /bin/sh -c "glance-manage db_sync" glance
+
+  systemctl enable openstack-glance-api.service openstack-glance-registry.service
+  systemctl start openstack-glance-api.service openstack-glance-registry.service
+
+
+  # Sometimes it doesn't work without restarting
+  glance-control all restart
+
+  ## Upload the first image to glance
+  mkdir -p /tmp/images
+  cd /tmp/images
+
+  ## if file is available localy just copy it instead of download
+  if [ -f /root/LocalRepo/Packages/keystone.py ]; then
+     echo "cirros copied, not downloaded" > /root/cirros-not-dl
+     cp /root/LocalRepo/Packages/cirros-0.3.4-x86_64-disk.img /tmp/images/ 
+  else
+     yum -y install wget
+     wget http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk.img
+  fi
+
+  source ~/admin-openrc.sh
+  glance image-create --name "cirros-0.3.4-x86_64" --file cirros-0.3.4-x86_64-disk.img \
+  --disk-format qcow2 --container-format bare --is-public True --progress
+
+  glance image-list
+}
+
+
+
+
+install_nova_controller () {
+
+ . /tmp/bomsi_{vars,lib_conf}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_conf
+ . ~/admin-openrc.sh
+
+  ## Create the MySQL/MariaDB user for nova
+  create_sql_user nova $NOVA_DB_PASSWORD
+
+  ## Create the user and endpoint for nova
+  openstack user create --password $NOVA_PASSWORD --email nova@os.dkrz.de nova
+  openstack role add --project service --user nova admin
+
+ openstack service create --name nova \
+  --description "OpenStack Compute" compute
+
+ openstack endpoint create \
+  --publicurl http://controller:8774/v2/%\(tenant_id\)s \
+  --internalurl http://controller:8774/v2/%\(tenant_id\)s \
+  --adminurl http://controller:8774/v2/%\(tenant_id\)s \
+  --region RegionOne \
+  compute
+
+
+  ## Install the packages for nova controller
+  yum -y install openstack-nova-api openstack-nova-cert openstack-nova-conductor \
+  openstack-nova-console openstack-nova-novncproxy openstack-nova-scheduler \
+  python-novaclient
+
+  ## Edit the configuration file of nova in the controller
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF database "connection = mysql://nova:${NOVA_DB_PASSWORD}@controller/nova"
+
+  rabbit_parameters $TMPF
+
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = nova"
+  susti $TMPF keystone_authtoken "password = $NOVA_PASSWORD"
+  MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+
+
+  cat > /etc/rsyncd.conf<<EOF
+uid = swift
+gid = swift
+log file = /var/log/rsyncd.log
+pid file = /var/run/rsyncd.pid
+address = $MY_MGM_IP
+[account]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/account.lock
+[container]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/container.lock
+[object]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/object.lock
+EOF
+
+
+  susti $TMPF DEFAULT "my_ip = $MY_MGM_IP"
+
+  susti $TMPF DEFAULT "vncserver_listen = $CONTROLLER_IP"
+  susti $TMPF DEFAULT "vncserver_proxyclient_address = $CONTROLLER_IP"
+  susti $TMPF glance "host = controller"
+  susti $TMPF oslo_concurrency "lock_path = /var/lib/nova/tmp"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+  setenforce 0
+  service firewalld stop
+
+  su -s /bin/sh -c "nova-manage db sync" nova
+
+
+ systemctl enable openstack-nova-api.service openstack-nova-cert.service \
+  openstack-nova-consoleauth.service openstack-nova-scheduler.service \
+  openstack-nova-conductor.service openstack-nova-novncproxy.service
+ systemctl start openstack-nova-api.service openstack-nova-cert.service \
+  openstack-nova-consoleauth.service openstack-nova-scheduler.service \
+  openstack-nova-conductor.service openstack-nova-novncproxy.service
+
+}
+
+
+
+
+install_nova_node (){
+  ## Usage: install_nova_node MNGM_IP_LAST
+   # 10.0.0.31 => 31
+  #print_title "install_nova_node on IP=" $1
+
+    #MY_IP=$1
+
+  . /tmp/bomsi_vars
+ # . /tmp/basic_functions
+
+  yum -y install openstack-nova-compute sysfsutils
+
+
+  TMPF="/etc/nova/nova.conf"
+  #susti $TMPF database "connection = mysql://nova:${NOVA_DB_PASSWORD}@controller/nova"
+
+  rabbit_parameters $TMPF
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = nova"
+  susti $TMPF keystone_authtoken "password = $NOVA_PASSWORD"
+  #MY_MGM_IP=`LC_ALL=C ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' &&`
+   MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+
+  susti $TMPF DEFAULT "my_ip = $MY_MGM_IP"
+
+  #susti $TMPF DEFAULT "my_ip=$MY_IP"
+  susti $TMPF DEFAULT "vnc_enabled = True"
+  susti $TMPF DEFAULT "vncserver_listen = 0.0.0.0"
+  susti $TMPF DEFAULT "vncserver_proxyclient_address = $MY_MGM_IP"
+  #susti $TMPF DEFAULT "novncproxy_base_url = http://controller:6080/vnc_auto.html"
+  susti $TMPF DEFAULT "novncproxy_base_url = http://$CONTROLLER_IP:6080/vnc_auto.html"
+  susti $TMPF glance "host = controller"
+  susti $TMPF oslo_concurrency "lock_path = /var/lib/nova/tmp"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+ egrep -c '(vmx|svm)' /proc/cpuinfo
+
+
+ systemctl enable libvirtd.service openstack-nova-compute.service
+ systemctl start libvirtd.service openstack-nova-compute.service
+
+ firewall-cmd --zone=public --add-port=5900/tcp --permanent
+ firewall-cmd --zone=public --add-port=5901/tcp --permanent
+ firewall-cmd --reload
+
+}
+
+
+check_compute () {
+  . ~/admin-openrc.sh
+  
+ echo "### This should show 4 services in the controller and 1 in the compute, all up"
+ nova service-list
+
+ echo "### This should show 9 boxes"
+ nova endpoints
+
+ echo "### This should show the cirros image"
+ nova image-list
+
+
+ ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+ nova keypair-add --pub-key ~/.ssh/id_rsa.pub demo-key
+ nova keypair-list
+
+}
+
+
+
+
+
+install_neutron_controller () {
+ print_title "install_neutron_controller"
+
+ . /tmp/bomsi_{vars,lib_conf}
+ . ~/admin-openrc.sh
+
+  create_sql_user neutron $NEUTRON_DB_PASSWORD
+
+  openstack user create --password $NEUTRON_PASSWORD --email neutron@os.dkrz.de neutron
+  openstack role add --project service --user neutron admin
+
+  openstack service create --name neutron \
+  --description "OpenStack Networking" network
+
+  openstack endpoint create \
+  --publicurl http://controller:9696 \
+  --adminurl http://controller:9696 \
+  --internalurl http://controller:9696 \
+  --region RegionOne \
+  network
+
+  yum -y install openstack-neutron openstack-neutron-ml2 python-neutronclient which
+
+
+  TMPF="/etc/neutron/neutron.conf"
+  susti $TMPF database "connection = mysql://neutron:${NEUTRON_DB_PASSWORD}@controller/neutron"
+
+  rabbit_parameters $TMPF  #This includes rpc_backend, rabbit_host, rabbit_userid and rabbit_password
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = neutron"
+  susti $TMPF keystone_authtoken "password = $NEUTRON_PASSWORD"
+   #Comment out the rest of the stuff in the section
+  sed -i '/identity_uri/s/^/#/g' $TMPF
+  sed -i '/admin_tenant_name/s/^/#/g' $TMPF
+  sed -i '/admin_user/s/^/#/g' $TMPF
+  sed -i '/admin_password/s/^/#/g' $TMPF
+  susti $TMPF DEFAULT "core_plugin = ml2"
+  susti $TMPF DEFAULT "service_plugins = router"
+  susti $TMPF DEFAULT "allow_overlapping_ips = True"
+  susti $TMPF DEFAULT "notify_nova_on_port_status_changes = True"
+  susti $TMPF DEFAULT "notify_nova_on_port_data_changes = True"
+  susti $TMPF DEFAULT "nova_url = http://controller:8774/v2"
+  susti $TMPF nova "auth_url = http://controller:35357"
+  susti $TMPF nova "auth_plugin = password"
+  susti $TMPF nova "project_domain_id = default"
+  susti $TMPF nova "user_domain_id = default"
+  susti $TMPF nova "region_name = RegionOne"
+  susti $TMPF nova "project_name = service"
+  susti $TMPF nova "username = nova"
+  susti $TMPF nova "password = $NOVA_PASSWORD"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+
+  TMPF="/etc/neutron/plugins/ml2/ml2_conf.ini"
+  susti $TMPF ml2  "type_drivers = flat,vlan,gre,vxlan"
+  susti $TMPF ml2  "tenant_network_types = gre"
+  susti $TMPF ml2  "mechanism_drivers = openvswitch"
+  susti $TMPF ml2_type_gre "tunnel_id_ranges = 1:1000"
+  susti $TMPF securitygroup "enable_security_group = True"
+  susti $TMPF securitygroup "enable_ipset = True"
+  susti $TMPF securitygroup "firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver"
+
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF DEFAULT "network_api_class = nova.network.neutronv2.api.API"
+  susti $TMPF DEFAULT "security_group_api = neutron"
+  susti $TMPF DEFAULT "linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver"
+  susti $TMPF DEFAULT "firewall_driver = nova.virt.firewall.NoopFirewallDriver"
+  susti $TMPF neutron "url = http://controller:9696"
+  susti $TMPF neutron "auth_strategy = keystone"
+  susti $TMPF neutron "admin_auth_url = http://controller:35357/v2.0"
+  susti $TMPF neutron "admin_tenant_name = service"
+  susti $TMPF neutron "admin_username = neutron"
+  susti $TMPF neutron "admin_password = $NEUTRON_PASSWORD"
+
+
+
+  ln -s /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini
+
+  su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf \
+  --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+
+  systemctl restart openstack-nova-api.service openstack-nova-scheduler.service \
+  openstack-nova-conductor.service
+
+  systemctl enable neutron-server.service
+  systemctl start neutron-server.service
+
+  echo "### This should show a list with 16 items"
+  neutron ext-list
+
+}
+
+
+
+
+install_neutron_node () {
+
+ . /tmp/bomsi_{vars,lib_conf}
+   print_title "install_neutron_node"
+
+  ifdown $IFACE2
+  ## Configure the external network
+  basic_net_ext $IFACE2
+
+  selinux_firewall_off
+
+  echo "net.ipv4.ip_forward=1" |tee -a  /etc/sysctl.conf
+  echo "net.ipv4.conf.all.rp_filter=0" |tee -a  /etc/sysctl.conf
+  echo "net.ipv4.conf.default.rp_filter=0" |tee -a  /etc/sysctl.conf
+
+  sysctl -p
+
+
+   yum -y install openstack-neutron openstack-neutron-ml2 openstack-neutron-openvswitch
+
+
+   ## This part here is exactly the same as in the controller
+  TMPF="/etc/neutron/neutron.conf"
+
+  rabbit_parameters $TMPF  #This includes rpc_backend, rabbit_host, rabbit_userid and rabbit_password
+
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = neutron"
+  susti $TMPF keystone_authtoken "password = $NEUTRON_PASSWORD"
+   #Comment out the rest of the stuff in the section
+  sed -i '/identity_uri/s/^/#/g' $TMPF
+  sed -i '/admin_tenant_name/s/^/#/g' $TMPF
+  sed -i '/admin_user/s/^/#/g' $TMPF
+  sed -i '/admin_password/s/^/#/g' $TMPF
+  susti $TMPF DEFAULT "core_plugin = ml2"
+  susti $TMPF DEFAULT "service_plugins = router"
+  susti $TMPF DEFAULT "allow_overlapping_ips = True"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+
+  TMPF="/etc/neutron/plugins/ml2/ml2_conf.ini"
+  susti $TMPF ml2  "type_drivers = flat,vlan,gre,vxlan"
+  susti $TMPF ml2  "tenant_network_types = gre"
+  susti $TMPF ml2  "mechanism_drivers = openvswitch"
+  susti $TMPF ml2_type_flat "flat_networks = external"
+  susti $TMPF ml2_type_gre "tunnel_id_ranges = 1:1000"
+  susti $TMPF securitygroup "enable_security_group = True"
+  susti $TMPF securitygroup "enable_ipset = True"
+  susti $TMPF securitygroup "firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver"
+  susti $TMPF ovs "local_ip = ${IPPR_T}21"  # This should be the "Instance Tunnels Interface" (Tunnel net)
+  susti $TMPF ovs "bridge_mappings = external:br-ex"
+  susti $TMPF ovs "tunnel_bridge = br-tun"
+  susti $TMPF agent "tunnel_types = gre"
+
+
+  TMPF="/etc/neutron/l3_agent.ini"
+  susti $TMPF DEFAULT "interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver"
+  #susti $TMPF DEFAULT "dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq"
+  susti $TMPF DEFAULT "external_network_bridge ="
+  susti $TMPF DEFAULT "router_delete_namespaces = True"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+
+  TMPF="/etc/neutron/dhcp_agent.ini"
+  susti $TMPF DEFAULT "interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver"
+  susti $TMPF DEFAULT "dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq"
+  susti $TMPF DEFAULT "dhcp_delete_namespaces = True"
+  susti $TMPF DEFAULT "verbose = True"
+  #Optional
+  #susti $TMPF DEFAULT "dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf"
+  #echo "dhcp-option-force=26,1454" |tee /etc/neutron/dnsmasq-neutron.conf
+  #pkill dnsmasq
+
+
+  TMPF="/etc/neutron/metadata_agent.ini"
+  susti $TMPF DEFAULT "auth_url = http://controller:5000"
+  susti $TMPF DEFAULT "auth_url = http://controller:35357"
+  susti $TMPF DEFAULT "auth_region = RegionOne"
+  susti $TMPF DEFAULT "auth_plugin = password"
+  susti $TMPF DEFAULT "project_domain_id = default"
+  susti $TMPF DEFAULT "user_domain_id = default"
+  susti $TMPF DEFAULT "project_name = service"
+  susti $TMPF DEFAULT "username = neutron"
+  susti $TMPF DEFAULT "password = $NEUTRON_PASSWORD"
+  susti $TMPF DEFAULT "nova_metadata_ip = controller"
+  susti $TMPF DEFAULT "metadata_proxy_shared_secret = $METADATA_SECRET"
+  susti $TMPF DEFAULT "verbose = True"
+
+}
+
+
+install_neutron_node_meta_nova () {
+  . /tmp/bomsi_vars
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF neutron "service_metadata_proxy = True"
+  susti $TMPF neutron "metadata_proxy_shared_secret = $METADATA_SECRET"
+  systemctl restart openstack-nova-api.service
+}
+
+
+configure_openvswitch () {
+
+  systemctl enable openvswitch.service
+  systemctl start openvswitch.service
+
+  ovs-vsctl add-br br-ex
+  
+  ovs-vsctl add-port br-ex $IFACE2
+  #ovs-vsctl add-port br-ex $(LC_ALL=C /sbin/route | grep default |awk -- '{ print $8 }')
+
+  #For testing purposes disable generic receive offload (GRO)
+  # ...better not, it disables the network
+  #ethtool -K $(LC_ALL=C /sbin/route | grep default |awk -- '{ print $8 }') gro off
+
+  ln -s /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini
+
+  cp /usr/lib/systemd/system/neutron-openvswitch-agent.service \
+  /usr/lib/systemd/system/neutron-openvswitch-agent.service.orig
+
+  sed -i 's,plugins/openvswitch/ovs_neutron_plugin.ini,plugin.ini,g' \
+  /usr/lib/systemd/system/neutron-openvswitch-agent.service
+
+  systemctl enable neutron-openvswitch-agent.service neutron-l3-agent.service \
+  neutron-dhcp-agent.service neutron-metadata-agent.service \
+  neutron-ovs-cleanup.service
+
+  systemctl start neutron-openvswitch-agent.service neutron-l3-agent.service \
+  neutron-dhcp-agent.service neutron-metadata-agent.service 
+}
+
+
+check_openvswitch () {
+  . ~/admin-openrc.sh
+  echo "This needs to show: Metadata agent, Open vSwitch agent, L3 agent and DHCP agent"
+  echo "Open vSwitch should be in the neutron node and in all the compute nodes"
+  neutron agent-list  
+}
+
+
+
+install_nova_node_neutron () {
+ . /tmp/bomsi_vars
+ #. ~/openrca.sh
+
+  if ! grep -q "net.ipv4.conf.all.rp_filter=0"  /etc/sysctl.conf; then
+    echo "net.ipv4.conf.all.rp_filter=0" |tee -a  /etc/sysctl.conf
+    echo "net.ipv4.conf.default.rp_filter=0" |tee -a  /etc/sysctl.conf
+    echo "net.bridge.bridge-nf-call-iptables=1" |tee -a  /etc/sysctl.conf
+    echo "net.bridge.bridge-nf-call-ip6tables=1" |tee -a  /etc/sysctl.conf
+    sysctl -p
+  fi
+
+  selinux_firewall_off
+
+  yum -y install openstack-neutron openstack-neutron-ml2 openstack-neutron-openvswitch
+
+  TMPF="/etc/neutron/neutron.conf"
+
+  rabbit_parameters $TMPF
+
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = neutron"
+  susti $TMPF keystone_authtoken "password = $NEUTRON_PASSWORD"
+   #Comment out the rest of the stuff in the section
+  sed -i '/identity_uri/s/^/#/g' $TMPF
+  sed -i '/admin_tenant_name/s/^/#/g' $TMPF
+  sed -i '/admin_user/s/^/#/g' $TMPF
+  sed -i '/admin_password/s/^/#/g' $TMPF
+  susti $TMPF DEFAULT "core_plugin = ml2"
+  susti $TMPF DEFAULT "service_plugins = router"
+  susti $TMPF DEFAULT "allow_overlapping_ips = True"
+  susti $TMPF DEFAULT "verbose = True"
+
+  TMPF="/etc/neutron/plugins/ml2/ml2_conf.ini"
+  #Comment bridge_mappings = external:br-ex
+  susti $TMPF ml2  "type_drivers = flat,vlan,gre,vxlan"
+  susti $TMPF ml2  "tenant_network_types = gre"
+  susti $TMPF ml2  "mechanism_drivers = openvswitch"
+  susti $TMPF ml2_type_gre "tunnel_id_ranges = 1:1000"
+  susti $TMPF securitygroup "enable_security_group = True"
+  susti $TMPF securitygroup "enable_ipset = True"
+  susti $TMPF securitygroup "firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver"
+  susti $TMPF ovs "local_ip = $IPPR_T"21""
+  susti $TMPF ovs "tunnel_bridge = br-tun"
+  susti $TMPF agent "tunnel_types = gre"
+
+  systemctl enable openvswitch.service
+  systemctl start openvswitch.service
+
+  
+
+ 
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF DEFAULT "network_api_class = nova.network.neutronv2.api.API"
+  susti $TMPF DEFAULT "security_group_api = neutron"
+  susti $TMPF DEFAULT "linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver"
+  susti $TMPF DEFAULT "firewall_driver = nova.virt.firewall.NoopFirewallDriver"
+  susti $TMPF neutron "url = http://controller:9696"
+  susti $TMPF neutron "auth_strategy = keystone"
+  susti $TMPF neutron "admin_auth_url = http://controller:35357/v2.0"
+  susti $TMPF neutron "admin_tenant_name = service"
+  susti $TMPF neutron "admin_username = neutron"
+  susti $TMPF neutron "admin_password = $NEUTRON_PASSWORD"
+
+
+  ln -s /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini
+
+  cp /usr/lib/systemd/system/neutron-openvswitch-agent.service \
+  /usr/lib/systemd/system/neutron-openvswitch-agent.service.orig
+  sed -i 's,plugins/openvswitch/ovs_neutron_plugin.ini,plugin.ini,g' \
+  /usr/lib/systemd/system/neutron-openvswitch-agent.service
+
+  systemctl restart openstack-nova-compute.service
+
+  systemctl enable neutron-openvswitch-agent.service
+  systemctl start neutron-openvswitch-agent.service
+
+}
+
+
+
+create_neutron_networks () {
+
+ . /tmp/bomsi_vars
+ . ~/admin-openrc.sh
+
+  #echo "### This should show 5 entries"
+  #neutron agent-list
+
+ #export VIRT_NET_POOL_S="192.168.100.5"  #1st IP in range
+ #export VIRT_NET_POOL_E="192.168.100.9"  #last IP
+ #export VIRT_NET_POOL_G="192.168.100.1"  #Gateway
+ #export VIRT_NET_POOL_N="192.168.100.0/24" #Network
+
+ export VIRT_NET_POOL_S=$IPPR_A'90'  #1st IP in range
+ export VIRT_NET_POOL_E=$IPPR_A'99'  #last IP
+ export VIRT_NET_POOL_G=$GATEWAY  #Gateway
+ export VIRT_NET_POOL_N=$IPPR_A'0/24' #Network
+
+ #Create an external network and subnetwork
+ neutron net-create ext-net --router:external \
+  --provider:physical_network external --provider:network_type flat
+
+ #neutron net-create ext-net --router:external True \
+ # --provider:physical_network external --provider:network_type flat #--shared
+
+ neutron subnet-create ext-net $VIRT_NET_POOL_N --name ext-subnet \
+  --allocation-pool start=$VIRT_NET_POOL_S,end=$VIRT_NET_POOL_E \
+  --disable-dhcp --gateway $VIRT_NET_POOL_G
+
+# neutron subnet-create ext-net --name ext-subnet \
+#  --allocation-pool start=$VIRT_NET_POOL_S,end=$VIRT_NET_POOL_E \
+#  --disable-dhcp --gateway $VIRT_NET_POOL_G $VIRT_NET_POOL_N
+
+ #Create tenant network
+ neutron net-create demo-net
+ neutron subnet-create demo-net 192.168.1.0/24 \
+  --name demo-subnet --gateway 192.168.1.1
+# neutron subnet-create demo-net --name demo-subnet \
+#  --gateway 192.168.1.1 192.168.1.0/24
+
+ neutron router-create demo-router
+ neutron router-interface-add demo-router demo-subnet
+ neutron router-gateway-set demo-router ext-net
+ #To remove
+ #neutron router-gateway-clear demo-router ext-net
+ #neutron router-interface-delete demo-router demo-subnet
+ #neutron router-delete demo-router
+ #neutron net-delete demo-net
+ #neutron net-delete ext-net
+
+
+ # neutron router-gateway-clear demo-router ext-net && neutron router-interface-delete demo-router demo-subnet &&neutron router-delete demo-router && neutron net-delete demo-net && neutron net-delete ext-net
+
+ #ifconfig $IFACE0 promisc
+
+ print_title "Testing Neutron Networkin"
+
+ echo "Check that l3-agent created the networks properly"
+ QROUTER=$(ip netns | grep qrouter-)
+ ip netns exec $QROUTER ip addr list
+ echo "Ping Gateway of the ext-net"
+ ip netns exec $QROUTER ping -c3 $VIRT_NET_POOL_S
+
+ neutron port-list
+ #neutron port-show #ID
+
+ #To delete them
+ #dhcp_delete_namespaces
+ #dhcp_delete_namespaces
+
+}
+
+
+
+
+install_horizon () {
+
+ . /tmp/bomsi_vars
+# . ~/openrca.sh
+
+yum -y install openstack-dashboard httpd mod_wsgi memcached python-memcached
+
+
+  TMP_FILE="/etc/openstack-dashboard/local_settings"
+  sed -i "s/.*OPENSTACK_HOST =.*/OPENSTACK_HOST = \"controller\"/" $TMP_FILE
+  sed -i "s/.*ALLOWED_HOSTS =.*/ALLOWED_HOSTS = ['*']/" $TMP_FILE
+
+  ##Bugfix
+  TMPF="/usr/share/openstack-dashboard/openstack_dashboard/settings.py"
+  sed -i "s/MESSAGE_STORAGE = 'django.contrib.messages.storage.fallback.FallbackStorage'.*/\
+MESSAGE_STORAGE = 'django.contrib.messages.storage.fallback.FallbackStorage' \n\
+AUTH_USER_MODEL = 'openstack_auth.User'/" $TMPF
+
+  TMPF="/etc/openstack-dashboard/local_settings"
+  sed -i "s/.*'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',.*/\
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',\n\
+        'LOCATION': '127.0.0.1:11211', /" $TMPF
+
+#  sed -i "/^CACHES =/{/{n;N;d}" $TMP_FILE
+#  sed -i "/^CACHES =/a\
+#   'default': {
+#       'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+#       'LOCATION': '127.0.0.1:11211'," $TMP_FILE
+
+#  sed -i "s/        'BACKEND': 'django.core.cache.backends.locmem.*/       'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',\n 'LOCATION': '127.0.0.1:11211',/" $TMP_FILE
+  #sed -i "s/TIME_ZONE =/TIME_ZONE =/" $TMP_FILE
+
+  #Allow web server to connect to OpenStack in SElinux
+  setsebool -P httpd_can_network_connect on
+
+  chown -R apache:apache /usr/share/openstack-dashboard/static
+
+  systemctl enable httpd.service memcached.service
+  systemctl start httpd.service memcached.service
+  service httpd restart
+  #service firewalld stop
+
+  setsebool -P httpd_unified 1
+  firewall-cmd --permanent --zone=public --add-service=http
+  firewall-cmd --permanent --zone=public --add-service=https
+  firewall-cmd --reload
+
+  #iptables-save |tee ~/iptables.backup
+  #iptables-restore < ~/iptables.backup
+}
+
+
+
+
+
+
+
+install_cinder_controller () {
+ 
+ . /tmp/bomsi_{vars,lib_conf}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_conf
+ . ~/admin-openrc.sh
+
+  create_sql_user cinder $CINDER_DB_PASSWORD
+
+  openstack user create --password $CINDER_PASSWORD --email cinder@os.dkrz.de cinder
+  openstack role add --project service --user cinder admin
+
+  openstack service create --name cinder \
+  --description "OpenStack Block Storage" volume
+
+  openstack service create --name cinderv2 \
+  --description "OpenStack Block Storage" volumev2
+
+  CINDER_EP=block
+
+  openstack endpoint create \
+  --publicurl http://$CINDER_EP:8776/v2/%\(tenant_id\)s \
+  --internalurl http://$CINDER_EP:8776/v2/%\(tenant_id\)s \
+  --adminurl http://$CINDER_EP:8776/v2/%\(tenant_id\)s \
+  --region RegionOne \
+  volume
+
+  openstack endpoint create \
+  --publicurl http://$CINDER_EP:8776/v2/%\(tenant_id\)s \
+  --internalurl http://$CINDER_EP:8776/v2/%\(tenant_id\)s \
+  --adminurl http://$CINDER_EP:8776/v2/%\(tenant_id\)s \
+  --region RegionOne \
+  volumev2
+
+  yum -y install openstack-cinder python-cinderclient python-oslo-db
+
+  unalias cp
+  cp /usr/share/cinder/cinder-dist.conf /etc/cinder/cinder.conf
+  chown -R cinder:cinder /etc/cinder/cinder.conf
+
+  TMPF="/etc/cinder/cinder.conf"
+  susti $TMPF database "connection = mysql://cinder:$CINDER_DB_PASSWORD@controller/cinder"
+  rabbit_parameters $TMPF
+
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = $RABBIT_PASS"
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = cinder"
+  susti $TMPF keystone_authtoken "password = $CINDER_PASSWORD"
+   #Comment out the rest of the stuff in the section
+  sed -i '/identity_uri/s/^/#/g' $TMPF
+  sed -i '/admin_tenant_name/s/^/#/g' $TMPF
+  sed -i '/admin_user/s/^/#/g' $TMPF
+  sed -i '/admin_password/s/^/#/g' $TMPF
+  #susti $TMPF DEFAULT "verbose = True"
+  #MY_MGM_IP=`LC_ALL=C ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'`
+ 
+   MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+ 
+  susti $TMPF DEFAULT "my_ip = $MY_MGM_IP"
+
+  #susti $TMPF DEFAULT "my_ip = $CONTROLLER_IP"
+  susti $TMPF oslo_concurrency "lock_path = /var/lock/cinder"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+  su -s /bin/sh -c "cinder-manage db sync" cinder
+ 
+  systemctl enable openstack-cinder-api.service openstack-cinder-scheduler.service
+  systemctl start openstack-cinder-api.service openstack-cinder-scheduler.service
+
+  echo "export OS_VOLUME_API_VERSION=2" | tee -a admin-openrc.sh demo-openrc.sh
+
+}
+
+
+
+install_cinder_node () {
+
+ . /tmp/bomsi_vars
+ #. ~/openrca.sh
+
+  yum -y install lvm2
+
+  systemctl enable lvm2-lvmetad.service
+  systemctl start lvm2-lvmetad.service
+ 
+  DISK="vdb"
+  DISK_PATH="/dev/"$DISK
+  #Partition disk
+  echo -e "o\nn\np\n1\n\n\nw" | fdisk $DISK_PATH
+  #/dev/vda2  1026048  20971519  86  Linux LVM
+  #Create LVM
+  pvcreate $DISK_PATH"1"
+  vgcreate cinder-volumes $DISK_PATH"1"
+
+  #TMPF="/etc/lvm/lvm.conf"
+  #sed -i 's/   filter = \[ \"a\/.*\/\" \]/   filter = [ "a\/vda\/", "a\/vdb\/", "r\/.*\/"]/' $TMPF
+
+  yum -y install openstack-cinder targetcli python-oslo-db python-oslo-log MySQL-python
+  #yum -y install openstack-cinder targetcli python-oslo-db MySQL-python
+
+  TMPF="/etc/cinder/cinder.conf"
+  susti $TMPF database "connection = mysql://cinder:$CINDER_DB_PASSWORD@controller/cinder"
+
+  rabbit_parameters $TMPF
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = $RABBIT_PASS"
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = cinder"
+  susti $TMPF keystone_authtoken "password = $CINDER_PASSWORD"
+
+  #susti $TMPF DEFAULT "my_ip = $CONTROLLER_IP"
+   ## Find the local IP in the Management net (assuming it is in $IFACE0 interface)
+#  MY_MGM_IP=`LC_ALL=C ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'`
+    MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+
+  cat > /etc/rsyncd.conf<<EOF
+uid = swift
+gid = swift
+log file = /var/log/rsyncd.log
+pid file = /var/run/rsyncd.pid
+address = $MY_MGM_IP
+[account]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/account.lock
+[container]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/container.lock
+[object]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/object.lock
+EOF
+
+  susti $TMPF DEFAULT "my_ip = $MY_MGM_IP"
+
+  susti $TMPF lvm "volume_driver = cinder.volume.drivers.lvm.LVMVolumeDriver"
+  susti $TMPF lvm "volume_group = cinder-volumes"
+  susti $TMPF lvm "iscsi_protocol = iscsi"
+  susti $TMPF lvm "iscsi_helper = lioadm"
+  susti $TMPF DEFAULT "enabled_backends = lvm"
+  susti $TMPF DEFAULT "glance_host = controller"
+  susti $TMPF oslo_concurrency "lock_path = /var/lock/cinder"
+  susti $TMPF DEFAULT "verbose = True"
+
+  mkdir /var/lock/cinder
+  chmod -R 777 /var/lock/cinder
+
+  systemctl enable openstack-cinder-volume.service target.service
+  systemctl start openstack-cinder-volume.service target.service
+
+  #Usefull commands: vgdisplay  &&  lvscan
+
+}
+
+cinder_test () {
+  source ~/admin-openrc.sh 
+  cinder service-list
+  cinder create --display-name demo-volume1 1
+  cinder list
+}
+
+
+
+install_swift_controller () {
+
+ . /tmp/bomsi_vars
+ . ~/admin-openrc.sh
+
+  openstack user create --password $SWIFT_PASSWORD --email swift@os.dkrz.de swift
+  openstack role add --project service --user swift admin
+
+   openstack service create --name swift \
+  --description "OpenStack Object Storage" object-store
+
+  openstack endpoint create \
+  --publicurl 'http://controller:8080/v1/AUTH_%(tenant_id)s' \
+  --internalurl 'http://controller:8080/v1/AUTH_%(tenant_id)s' \
+  --adminurl http://controller:8080 \
+  --region RegionOne \
+  object-store
+
+  yum -y install openstack-swift-proxy python-swiftclient python-keystone-auth-token \
+  python-keystonemiddleware memcached
+
+  
+  rm -rf /etc/swift/proxy-server.conf
+  if [ -f /root/LocalRepo/Packages/account-server.conf-sample ]; then
+     cp /root/LocalRepo/Packages/proxy-server.conf-sample /etc/swift/proxy-server.conf 
+     echo " " > /root/swiftprox-conf-files-notdl
+  else
+     curl -o /etc/swift/proxy-server.conf \
+     https://git.openstack.org/cgit/openstack/swift/plain/etc/proxy-server.conf-sample?h=stable/kilo
+  fi
+
+
+  
+  TMPF="/etc/swift/proxy-server.conf"
+  susti $TMPF DEFAULT "bind_port = 8080" 
+  susti $TMPF DEFAULT "user = swift"
+  susti $TMPF DEFAULT "swift_dir=/etc/swift"
+  #susti $TMPF "pipeline:main" "pipeline = authtoken cache healthcheck keystoneauth proxy-logging proxy-server" 
+  susti $TMPF "pipeline:main" "pipeline = catch_errors gatekeeper healthcheck proxy-logging cache container_sync bulk ratelimit authtoken keystoneauth container-quotas account-quotas slo dlo proxy-logging proxy-server" 
+  #susti $TMPF "app:proxy-server" "allow_account_management = true" 
+  susti $TMPF "app:proxy-server" "account_autocreate = true" 
+  susti $TMPF "filter:keystoneauth" "use = egg:swift#keystoneauth" 
+  #susti $TMPF "filter:keystoneauth" "operator_roles = admin,_member_" 
+  susti $TMPF "filter:keystoneauth" "operator_roles = admin,user" 
+  susti $TMPF "filter:authtoken" "paste.filter_factory = keystonemiddleware.auth_token:filter_factory" 
+  susti $TMPF "filter:authtoken" "auth_uri = http://controller:5000" 
+  susti $TMPF "filter:authtoken" "auth_url = http://controller:35357" 
+  susti $TMPF "filter:authtoken" "auth_plugin = password" 
+  susti $TMPF "filter:authtoken" "project_domain_id = default" 
+  susti $TMPF "filter:authtoken" "user_domain_id = default" 
+  susti $TMPF "filter:authtoken" "project_name = service" 
+  susti $TMPF "filter:authtoken" "username = swift" 
+  susti $TMPF "filter:authtoken" "password = $SWIFT_PASSWORD" 
+  susti $TMPF "filter:authtoken" "delay_auth_decision = true" 
+  susti $TMPF "filter:cache" "memcache_servers = 127.0.0.1:11211" 
+
+}
+
+
+
+
+install_swift_node () {
+
+ . /tmp/bomsi_{vars,lib_conf}
+ #. /tmp/bomsi_vars
+ #. /tmp/bomsi_lib_conf
+ #. ~/openrca.sh
+
+  yum -y install xfsprogs rsync
+
+  selinux_firewall_off
+
+  ## Try to get all disks available. Assuming the filesystem is on /dev/*da
+  ## A better solution would probably use lsblk -il or something
+  FREE_DISKS=$(fdisk -l |grep Disk |awk '{print $2}' |grep '^/dev/[hsv]d..$' |grep -v "a"|sed 's/://'|awk -F"/" '{print $NF}')
+  echo $FREE_DISKS
+
+  ## Prepare all free disks and mount them in /srv/node
+  for DISK in $FREE_DISKS
+    do
+      echo -e "o\nn\np\n1\n\n\nw" | fdisk /dev/$DISK
+      mkfs.xfs -f /dev/$DISK"1"
+      mkdir -p /srv/node/$DISK"1"
+      #Add line to fstab only if it does not exist!
+      grep -q "/dev/${DISK}1 /srv/node/${DISK}1"  /etc/fstab || \
+      echo "/dev/${DISK}1 /srv/node/${DISK}1 xfs noatime,nodiratime,nobarrier,logbufs=8 0 2" >> /etc/fstab
+      mount /srv/node/$DISK"1"
+    done
+
+  ## If the object node has only one disk, attach a "virtual" one of 2Gb
+  if [ -z  $FREE_DISKS ]; then
+    dd if=/dev/zero of=/root/DISK1.img bs=1M count=2000
+    mkfs.xfs /root/DISK1.img
+    echo "/root/DISK1 /srv/node/vfda1 xfs noatime,nodiratime,nobarrier,logbufs=8 0 2" >> /etc/fstab
+    mount /srv/node/vfda1
+    FREE_DISKS="vfda1"
+  fi
+
+ echo $FREE_DISKS > ~/FREE_DISKS
+
+ #DISK1="vdb"
+ #DISK2="vdc"
+
+ ##Partition disk
+ #echo -e "o\nn\np\n1\n\n\nw" | fdisk /dev/$DISK1
+ #echo -e "o\nn\np\n1\n\n\nw" | fdisk /dev/$DISK2
+
+ #mkfs.xfs /dev/$DISK1"1"
+ #mkfs.xfs /dev/$DISK2"1"
+
+ #mkdir -p /srv/node/$DISK1"1"
+ #mkdir -p /srv/node/$DISK2"1"
+
+ #echo "/dev/"$DISK1"1 /srv/node/$DISK1"1" xfs noatime,nodiratime,nobarrier,logbufs=8 0 2" >> /etc/fstab
+ #echo "/dev/"$DISK2"1 /srv/node/$DISK2"1" xfs noatime,nodiratime,nobarrier,logbufs=8 0 2" >> /etc/fstab
+
+ #mount /srv/node/$DISK1"1"
+ #mount /srv/node/$DISK2"1"
+
+ # MY_MGM_IP=`LC_ALL=C ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' &&`
+
+  MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+
+
+  cat > /etc/rsyncd.conf<<EOF
+uid = swift
+gid = swift
+log file = /var/log/rsyncd.log
+pid file = /var/run/rsyncd.pid
+address = $MY_MGM_IP
+[account]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/account.lock
+[container]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/container.lock
+[object]
+max connections = 2
+path = /srv/node/
+read only = false
+lock file = /var/lock/object.lock
+EOF
+
+  systemctl enable rsyncd.service
+  systemctl start rsyncd.service
+
+
+  yum -y install openstack-swift-account openstack-swift-container openstack-swift-object
+
+
+  if [ -f /root/LocalRepo/Packages/account-server.conf-sample ]; then
+     cp /root/LocalRepo/Packages/account-server.conf-sample /etc/swift/account-server.conf 
+     cp /root/LocalRepo/Packages/container-server.conf-sample /etc/swift/container-server.conf 
+     cp /root/LocalRepo/Packages/object-server.conf-sample /etc/swift/object-server.conf 
+     cp /root/LocalRepo/Packages/container-reconciler.conf-sample /etc/swift/container-reconciler.conf 
+     cp /root/LocalRepo/Packages/object-expirer.conf-sample /etc/swift/object-expirer.conf 
+     echo " " > /root/swift-conf-files-notdl
+  else
+    curl -o /etc/swift/account-server.conf \
+    https://git.openstack.org/cgit/openstack/swift/plain/etc/account-server.conf-sample?h=stable/kilo
+ 
+    curl -o /etc/swift/container-server.conf \
+    https://git.openstack.org/cgit/openstack/swift/plain/etc/container-server.conf-sample?h=stable/kilo
+
+    curl -o /etc/swift/object-server.conf \
+    https://git.openstack.org/cgit/openstack/swift/plain/etc/object-server.conf-sample?h=stable/kilo
+
+    curl -o /etc/swift/container-reconciler.conf \
+    https://git.openstack.org/cgit/openstack/swift/plain/etc/container-reconciler.conf-sample?h=stable/kilo
+
+    curl -o /etc/swift/object-expirer.conf \
+    https://git.openstack.org/cgit/openstack/swift/plain/etc/object-expirer.conf-sample?h=stable/kilo
+  fi
+
+
+
+
+  for TMPF in /etc/swift/account-server.conf /etc/swift/container-server.conf /etc/swift/object-server.conf
+  do  
+    susti $TMPF DEFAULT "bind_ip = $MY_MGM_IP"
+    susti $TMPF DEFAULT "user = swift"
+    susti $TMPF DEFAULT "swift_dir = /etc/swift"
+    susti $TMPF DEFAULT "devices = /srv/node"
+    susti $TMPF "filter:recon" "recon_cache_path = /var/cache/swift"
+  done
+
+  TMPF="/etc/swift/account-server.conf"
+   susti $TMPF DEFAULT "bind_port = 6002"
+   susti $TMPF "pipeline:main" "pipeline = healthcheck recon account-server"
+  TMPF="/etc/swift/container-server.conf" 
+   susti $TMPF DEFAULT "bind_port = 6001"
+   susti $TMPF "pipeline:main" "pipeline = healthcheck recon container-server"
+  TMPF="/etc/swift/object-server.conf"
+   susti $TMPF DEFAULT "bind_port = 6000"
+   susti $TMPF "pipeline:main" "pipeline = healthcheck recon object-server"
+    susti $TMPF "filter:recon" "recon_lock_path = /var/lock"
+
+  chown -R swift:swift /srv/node
+  
+  mkdir -p /var/cache/swift
+  chown -R swift:swift /var/cache/swift
+  
+}
+
+
+
+
+create_swift_rings (){
+
+  . /tmp/bomsi_{vars,lib_conf}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_conf
+
+
+  ## Assuming the amount of disks is the same as the one in install_swift_node 
+  DISKS=$(cat ~/FREE_DISKS)
+
+
+  #Account Ring
+  cd /etc/swift
+  swift-ring-builder account.builder create 10 3 1
+  for IP in $OBJECT_IP
+   do 
+     for DISK in DISKS; do
+       swift-ring-builder account.builder add r1z1-$IP:6002/${DISK}1 100
+     done
+     #swift-ring-builder account.builder add r1z1-$IP:6002/vdb1 100
+     #swift-ring-builder account.builder add r1z1-$IP:6002/vdc1 100
+   done
+
+  swift-ring-builder account.builder
+  swift-ring-builder account.builder rebalance
+
+  #Cointainer Ring
+  cd /etc/swift
+  swift-ring-builder container.builder create 10 3 1
+  for IP in $OBJECT_IP
+   do 
+     for DISK in DISKS; do
+       swift-ring-builder container.builder add r1z1-$IP:6001/${DISK}1 100
+     done
+     #swift-ring-builder container.builder add r1z1-$IP:6001/vdb1 100
+     #swift-ring-builder container.builder add r1z1-$IP:6001/vdc1 100
+   done
+
+  swift-ring-builder container.builder
+  swift-ring-builder container.builder rebalance
+
+  #Object Ring
+  cd /etc/swift
+  swift-ring-builder object.builder create 10 3 1
+  for IP in $OBJECT_IP
+   do 
+     for DISK in DISKS; do
+       swift-ring-builder object.builder add r1z1-$IP:6000/${DISK}1 100
+     done
+     #swift-ring-builder object.builder add r1z1-$IP:6000/vdb1 100
+     #swift-ring-builder object.builder add r1z1-$IP:6000/vdc1 100
+   done
+
+  swift-ring-builder object.builder
+  swift-ring-builder object.builder rebalance
+  
+  #Copy account.ring.gz, container.ring.gz and object.ring.gz files to /etc/swift/ of each storage node and additional proxy node
+  yum -y install sshpass
+  for IP in $CONTROLLER_IP #$OBJECT_IP
+   do
+    sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$IP hostname
+    #sshpass -p $ROOT_PASSWORD ssh-copy-id -o "StrictHostKeyChecking no" root@$IP
+    echo $IP
+    install-ssh-keys $ROOT_PASSWORD $IP 
+    scp /etc/swift/account.ring.gz  root@$IP:/etc/swift/
+    scp /etc/swift/container.ring.gz  root@$IP:/etc/swift/
+    scp /etc/swift/object.ring.gz  root@$IP:/etc/swift/
+   done  
+
+}
+
+
+
+finalize_swift_installation () {
+
+  . /tmp/bomsi_vars
+
+  rm -rf /etc/swift/swift.conf
+  if [ -f /root/LocalRepo/Packages/account-server.conf-sample ]; then
+     cp /root/LocalRepo/Packages/swift.conf-sample /etc/swift/swift.conf 
+     echo " " > /root/swift-conf-files-notdl
+  else
+    curl -o /etc/swift/swift.conf \
+    https://git.openstack.org/cgit/openstack/swift/plain/etc/swift.conf-sample?h=stable/kilo
+  fi
+
+
+  export SWIFT_HASH_PREFIX=$(openssl rand -hex 10 |tee token_admin)
+  export SWIFT_HASH_SUBFIX=$(openssl rand -hex 10 |tee token_admin)
+  echo "SWIFT HASH PATH PREFIX= " $SWIFT_HASH_PREFIX >  ~/SWIFT_HASHES 
+  echo "SWIFT HASH PATH SUBFIX= " $SWIFT_HASH_SUBFIX >> ~/SWIFT_HASHES 
+ 
+  TMPF="/etc/swift/swift.conf"
+  susti $TMPF "swift-hash" "swift_hash_path_suffix = $SWIFT_HASH_SUBFIX"
+  susti $TMPF "swift-hash" "swift_hash_path_prefix = $SWIFT_HASH_PREFIX"
+  susti $TMPF "storage-policy:0]" "name = Policy-0"
+  susti $TMPF "storage-policy:0]" "default = yes"
+
+  chown -R swift:swift /etc/swift
+  
+  systemctl enable openstack-swift-proxy.service memcached.service
+  systemctl start openstack-swift-proxy.service memcached.service
+
+
+  #Copy swift.conf files to /etc/swift/ of each storage node and additional proxy node
+  yum -y install sshpass
+  for IP in $SWIFT_N_IP
+   do
+    sshpass -p $ROOT_PASSWORD ssh-copy-id -o "StrictHostKeyChecking no" root@$IP
+    scp /etc/swift/swift.conf  root@$IP:/etc/swift/
+    ssh root@$IP 'chown -R swift:swift /etc/swift' 
+   done  
+
+}
+
+
+start_swift_node (){
+  systemctl enable openstack-swift-account.service openstack-swift-account-auditor.service \
+  openstack-swift-account-reaper.service openstack-swift-account-replicator.service
+  systemctl start openstack-swift-account.service openstack-swift-account-auditor.service \
+  openstack-swift-account-reaper.service openstack-swift-account-replicator.service
+  systemctl enable openstack-swift-container.service openstack-swift-container-auditor.service \
+  openstack-swift-container-replicator.service openstack-swift-container-updater.service
+  systemctl start openstack-swift-container.service openstack-swift-container-auditor.service \
+  openstack-swift-container-replicator.service openstack-swift-container-updater.service
+  systemctl enable openstack-swift-object.service openstack-swift-object-auditor.service \
+  openstack-swift-object-replicator.service openstack-swift-object-updater.service
+  systemctl start openstack-swift-object.service openstack-swift-object-auditor.service \
+  openstack-swift-object-replicator.service openstack-swift-object-updater.service
+
+
+
+  service openstack-swift-account start
+  service openstack-swift-container start
+  service openstack-swift-object start
+
+  #systemctl restart openstack-swift-account openstack-swift-container openstack-swift-object
+  #service openstack-swift-start start
+
+  systemctl status openstack-swift-account openstack-swift-container openstack-swift-object
+  systemctl status openstack-swift-account.service openstack-swift-account-auditor.service \
+    openstack-swift-account-reaper.service openstack-swift-account-replicator.service \
+    openstack-swift-container.service openstack-swift-container-auditor.service \
+    openstack-swift-container-replicator.service openstack-swift-container-updater.service \
+    openstack-swift-object.service openstack-swift-object-auditor.service \
+    openstack-swift-object-replicator.service openstack-swift-object-updater.service
+
+
+  setenforce 0
+  service firewalld stop
+
+}
+
+
+
+
+
+
+
+install_heat () {
+
+ . /tmp/bomsi_{vars,lib_conf}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_conf
+ . ~/admin-openrc.sh
+
+  create_sql_user heat $HEAT_DB_PASSWORD
+
+  openstack user create --password $HEAT_PASSWORD --email heat@os.dkrz.de heat
+  openstack role add --project service --user heat admin
+
+  openstack role create heat_stack_owner
+  openstack role add --project demo --user demo heat_stack_owner
+
+  openstack role create heat_stack_user
+
+  openstack service create --name heat \
+  --description "Orchestration" orchestration
+  
+  openstack endpoint create \
+  --publicurl http://controller:8004/v1/%\(tenant_id\)s \
+  --internalurl http://controller:8004/v1/%\(tenant_id\)s \
+  --adminurl http://controller:8004/v1/%\(tenant_id\)s \
+  --region RegionOne \
+  orchestration
+
+  openstack endpoint create \
+  --publicurl http://controller:8000/v1 \
+  --internalurl http://controller:8000/v1 \
+  --adminurl http://controller:8000/v1 \
+  --region RegionOne \
+  cloudformation
+
+
+  yum -y install openstack-heat-api openstack-heat-api-cfn openstack-heat-engine python-heatclient 
+
+  unalias cp
+  rm -rf /etc/heat/heat.conf
+  cp -r /usr/share/heat/heat-dist.conf /etc/heat/heat.conf
+  chown -R heat:heat /etc/heat/heat.conf
+
+
+  #PATH=$PATH:/tmp/
+  TMPF="/etc/heat/heat.conf"
+  susti $TMPF database "connection = mysql://heat:$HEAT_DB_PASSWORD@controller/heat"
+
+  rabbit_parameters $TMPF
+
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000/v2.0"
+  susti $TMPF keystone_authtoken "identity_uri = http://controller:35357"
+  susti $TMPF keystone_authtoken "admin_tenant_name = service"
+  susti $TMPF keystone_authtoken "admin_user = heat"
+  susti $TMPF keystone_authtoken "admin_password = $HEAT_PASSWORD"
+  susti $TMPF ec2authtoken "auth_uri = http://controller:5000/v2.0"
+  susti $TMPF DEFAULT "heat_metadata_server_url = http://controller:8000"
+  susti $TMPF DEFAULT "heat_waitcondition_server_url = http://controller:8000/v1/waitcondition"
+  susti $TMPF DEFAULT "stack_domain_admin = heat_domain_admin"
+  susti $TMPF DEFAULT "stack_domain_admin_password = $HEAT_DOMAIN_PASS"
+  susti $TMPF DEFAULT "stack_user_domain_name = heat_user_domain"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+ BULK_VARS=$( heat-keystone-setup-domain \
+  --stack-user-domain-name heat_user_domain \
+  --stack-domain-admin heat_domain_admin \
+  --stack-domain-admin-password $HEAT_DOMAIN_PASS)
+
+ STACK_USER_DOMAIN_ID=$(echo "$BULK_VARS" |grep stack_user_domain_id |awk -F= '{print $2}')
+ STACK_DOMAIN_ADMIN=$(echo "$BULK_VARS" |grep "stack_domain_admin=" |awk -F= '{print $2}')
+ STACK_DOMAIN_ADMIN_PASSWORD=$(echo "$BULK_VARS" |grep "stack_domain_admin_password" |awk -F= '{print $2}')
+
+  susti $TMPF DEFAULT "stack_user_domain_id = $STACK_USER_DOMAIN_ID"
+
+  
+
+
+  su -s /bin/sh -c "heat-manage db_sync" heat
+
+  systemctl enable openstack-heat-api.service openstack-heat-api-cfn.service \
+  openstack-heat-engine.service
+  systemctl start openstack-heat-api.service openstack-heat-api-cfn.service \
+  openstack-heat-engine.service
+
+}
+
+heat_template () {
+
+  . ~/admin-openrc.sh
+  . /tmp/bomsi_vars
+
+  cat > /tmp/images/test_stack.yml << EOF
+heat_template_version: 2014-10-16
+description: A simple server.
+ 
+parameters:
+  ImageID:
+    type: string
+    description: Image use to boot a server
+  NetID:
+    type: string
+    description: Network ID for the server
+ 
+resources:
+  server:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: ImageID }
+      flavor: m1.tiny
+      networks:
+      - network: { get_param: NetID }
+ 
+outputs:
+  private_ip:
+    description: IP address of the server in the private network
+    value: { get_attr: [ server, first_address ] }
+
+EOF
+
+NET_ID=$(nova net-list | awk '/ demo-net / { print $2 }')
+heat stack-create -f /tmp/images/test_stack.yml \
+  -P "ImageID=cirros-0.3.4-x86_64;NetID=$NET_ID" testStack
+
+heat stack-list
+
+}
+
+
+
+
+
+
+
+
+install_ceilometer_controller () {
+
+ . /tmp/bomsi_{vars,lib_conf}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_conf
+
+  yum -y install mongodb-server mongodb
+
+  PATH=$PATH:/tmp/
+  TMPF="/etc/mongodb.conf"
+  sed -i "s/bind_ip = 127.0.0.1/bind_ip = $CONTROLLER_IP/" $TMPF
+  echo "smallfiles = true" >> $TMPF
+
+  systemctl enable mongod.service
+  systemctl start mongod.service
+
+ mongo --host controller --eval '
+  db = db.getSiblingDB("ceilometer");
+  db.addUser({user: "ceilometer",
+  pwd: "$CEILOMETER_DB_PASSWORD",
+  roles: [ "readWrite", "dbAdmin" ]})' 
+
+#  mongo --host controller --eval '
+#   db = db.getSiblingDB("ceilometer");
+#   db.createUser({user: "ceilometer",
+#   pwd: "Password",
+#   roles: [ "readWrite", "dbAdmin" ]})' 
+
+#  mongo --host controller --eval << EOF
+#'db = db.getSiblingDB("ceilo");
+#db.createUser({user: "ceilometer",
+#pwd: "Password",
+#roles: [ "readWrite", "dbAdmin" ]})' 
+#EOF
+
+MONGOCMD=" \
+'db = db.getSiblingDB("ceilometer"); \
+db.createUser({user: "ceilometer", \
+pwd: "$CEILOMETER_DB_PASSWORD", \
+roles: [ "readWrite", "dbAdmin" ]}) '\
+"
+
+  mongo --host controller --eval $MONGOCMD
+   #Check login
+   # mongo ceilometer --host controller -u 'ceilometer' -p 'Password' --eval 'db.version()'
+   #for changing the password
+   # db.changeUserPassword("ceilometer", "Password")
+
+
+  #mysql -u root -p$MYSQL_ROOT << EOF
+# ' mongo --host controller --eval << EOF'
+#db = db.getSiblingDB("ceilometer");
+#db.createUser({user: "ceilometer",
+#pwd: "$CEILOMETER_DB_PASSWORD",
+#roles: [ "readWrite", "dbAdmin" ]})' 
+#EOF
+
+
+
+  . ~/admin-openrc.sh
+
+
+  openstack user create --password $CEILOMETER_PASSWORD --email ceilometer@os.dkrz.de ceilometer
+  openstack role add --project service --user ceilometer admin
+
+  openstack service create --name ceilometer \
+  --description "Telemetry" metering
+
+  openstack endpoint create \
+  --publicurl http://controller:8777 \
+  --internalurl http://controller:8777 \
+  --adminurl http://controller:8777 \
+  --region RegionOne \
+  metering
+
+
+
+
+   yum -y install openstack-ceilometer-api openstack-ceilometer-collector \
+  openstack-ceilometer-notification openstack-ceilometer-central openstack-ceilometer-alarm \
+  python-ceilometerclient
+
+  METERING_SECRET=$(openssl rand -hex 10)
+  echo $METERING_SECRET > ~/METERING_SECRET
+
+  PATH=$PATH:/tmp/
+  TMPF="/etc/ceilometer/ceilometer.conf"
+  susti $TMPF database "connection = mongodb://ceilometer:$CEILOMETER_DB_PASSWORD@controller:27017/ceilometer"
+
+  rabbit_parameters $TMPF
+
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000/v2.0"
+  susti $TMPF keystone_authtoken "identity_uri = http://controller:35357"
+  susti $TMPF keystone_authtoken "admin_tenant_name = service"
+  susti $TMPF keystone_authtoken "admin_user = ceilometer"
+  susti $TMPF keystone_authtoken "admin_password = $CEILOMETER_PASSWORD"
+  susti $TMPF service_credentials "os_auth_url = http://controller:5000/v2.0"
+  susti $TMPF service_credentials "os_username = ceilometer"
+  susti $TMPF service_credentials "os_tenant_name = service"
+  susti $TMPF service_credentials "os_password = $CEILOMETER_PASSWORD"
+  susti $TMPF service_credentials "os_endpoint_type = internalURL"
+  susti $TMPF service_credentials "os_region_name = RegionOne"
+  susti $TMPF publisher "metering_secret = $METERING_SECRET"
+  susti $TMPF DEFAULT "verbose = True"
+  
+  systemctl enable openstack-ceilometer-api.service openstack-ceilometer-notification.service \
+  openstack-ceilometer-central.service openstack-ceilometer-collector.service \
+  openstack-ceilometer-alarm-evaluator.service openstack-ceilometer-alarm-notifier.service
+
+  systemctl start openstack-ceilometer-api.service openstack-ceilometer-notification.service \
+  openstack-ceilometer-central.service openstack-ceilometer-collector.service \
+  openstack-ceilometer-alarm-evaluator.service openstack-ceilometer-alarm-notifier.service 
+
+
+}
+
+
+
+install_ceilometer_compute_agent () {
+   # @compute
+ . /tmp/bomsi_vars
+ 
+  yum -y install openstack-ceilometer-compute python-ceilometerclient python-pecan
+  #PATH=$PATH:/tmp/
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF DEFAULT "instance_usage_audit = True"
+  susti $TMPF DEFAULT "instance_usage_audit_period = hour"
+  susti $TMPF DEFAULT "notify_on_state_change = vm_and_task_state"
+  susti $TMPF DEFAULT "notification_driver = messagingv2"
+
+  systemctl restart openstack-nova-compute.service
+
+  TMPF="/etc/ceilometer/ceilometer.conf"
+  susti $TMPF publisher "metering_secret = $METERING_SECRET"
+  #susti $TMPF publisher "metering_secret = $METERING_SECRET"
+
+  rabbit_parameters $TMPF
+ 
+   #susti $TMPF DEFAULT "rpc_backend = rabbit"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+   #susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000/v2.0"
+  susti $TMPF keystone_authtoken "identity_uri = http://controller:35357"
+  susti $TMPF keystone_authtoken "admin_tenant_name = service"
+  susti $TMPF keystone_authtoken "admin_user = ceilometer"
+  susti $TMPF keystone_authtoken "admin_password = $CEILOMETER_PASSWORD"
+  susti $TMPF service_credentials "os_auth_url = http://controller:5000/v2.0"
+  susti $TMPF service_credentials "os_username = ceilometer"
+  susti $TMPF service_credentials "os_tenant_name = service"
+  susti $TMPF service_credentials "os_password = $CEILOMETER_PASSWORD"
+  susti $TMPF service_credentials "os_endpoint_type = internalURL"
+  susti $TMPF service_credentials "os_region_name = $KEYSTONE_REGION"
+  susti $TMPF DEFAULT "verbose = True"
+  
+  systemctl enable openstack-ceilometer-compute.service
+  systemctl start openstack-ceilometer-compute.service
+
+}
+
+
+
+install_ceilometer_image_service () {
+   #@controller
+  . /tmp/bomsi_vars
+
+  #PATH=$PATH:/tmp/
+  for TMP in /etc/glance/glance-api.conf /etc/glance/glance-registry.conf
+   do 
+    TMPF=${TMP}
+    susti $TMPF DEFAULT "notification_driver = messagingv2"
+    susti $TMPF DEFAULT "rpc_backend = rabbit"
+    susti $TMPF DEFAULT "rabbit_host = controller"
+    susti $TMPF DEFAULT "rabbit_userid = openstack"
+    susti $TMPF DEFAULT "rabbit_password = ${RABBIT_PASS}"
+   done
+
+  # again
+  #TMPF="/etc/glance/glance-registry.conf"
+  #susti $TMPF DEFAULT "notification_driver = messaging"
+  #susti $TMPF DEFAULT "rpc_backend = rabbit"
+  #susti $TMPF DEFAULT "rabbit_host = controller"
+  #susti $TMPF DEFAULT "rabbit_userid = openstack"
+  #susti $TMPF DEFAULT "rabbit_password = ${RABBIT_PASS}"
+
+  systemctl restart openstack-glance-api.service openstack-glance-registry.service
+
+}
+
+
+ # @controller && @blockX
+configure_ceilometer_block_st () {
+  
+  PATH=$PATH:/tmp/
+  TMPF="/etc/cinder/cinder.conf"
+  susti $TMPF DEFAULT "control_exchange = cinder"
+  susti $TMPF DEFAULT "notification_driver = messagingv2"
+
+  systemctl restart openstack-cinder-api.service openstack-cinder-scheduler.service
+  systemctl restart openstack-cinder-volume.service
+
+} 
+
+configure_ceilometer_object_st (){
+  #@object st proxy = controller
+ . /tmp/bomsi_vars
+ . ~/openrca.sh
+
+ #yum -y install python-ceilometerclient
+ 
+  openstack role create ResellerAdmin
+  openstack role add --project service --user ceilometer ResellerAdmin
+
+  #keystone role-create --name ResellerAdmin
+  #ROLE=$(keystone role-list | grep "ResellerAdmin" | awk '{print $2}')
+  #keystone user-role-add --tenant service --user ceilometer --role $ROLE
+
+  #PATH=$PATH:/tmp/
+  TMPF="/etc/swift/proxy-server.conf"
+  susti $TMPF filter:keystoneauth "operator_roles = admin,user,ResellerAdmin"
+  susti $TMPF pipeline:main "pipeline = authtoken cache healthcheck keystoneauth proxy-logging ceilometer proxy-server"
+  susti $TMPF filter:ceilometer "paste.filter_factory = ceilometermiddleware.swift:filter_factory"
+  susti $TMPF filter:ceilometer "control_exchange = swift"
+  susti $TMPF filter:ceilometer "url = rabbit://openstack:RABBIT_PASS@controller:5672/"
+  susti $TMPF filter:ceilometer "driver = messagingv2"
+  susti $TMPF filter:ceilometer "topic = notifications"
+  susti $TMPF filter:ceilometer "log_level = WARN"
+
+    #susti $TMPF filter:ceilometer "use = egg:ceilometer#swift"
+    #susti $TMPF pipeline:main "pipeline = healthcheck cache authtoken keystoneauth ceilometer proxy-server"
+    #susti $TMPF filter:keystoneauth "operator_roles = Member,admin,swiftoperator,_member_,ResellerAdmin"
+
+  usermod -a -G ceilometer swift
+
+  pip install ceilometermiddleware
+  
+  systemctl restart openstack-swift-proxy.service
+
+}
+
+
+
+ceilometer_check () {
+ . /tmp/bomsi_vars
+ . ~/openrca.sh
+ 
+ ceilometer meter-list
+ glance image-download "cirros-0.3.3-x86_64" > ~/cirros.img
+ ceilometer statistics -m image.download -p 60
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
