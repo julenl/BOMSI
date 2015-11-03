@@ -893,7 +893,9 @@ install_neutron_node () {
   susti $TMPF securitygroup "enable_security_group = True"
   susti $TMPF securitygroup "enable_ipset = True"
   susti $TMPF securitygroup "firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver"
-  susti $TMPF ovs "local_ip = ${IPPR_T}21"  # This should be the "Instance Tunnels Interface" (Tunnel net)
+  ## Find the local IP in the tunnel network (instance tunnels interface)
+  LOC_TUN_IP=$(ip a |grep $IPPR_T |awk '{print $2}' |awk -F/ '{print $1}')
+  susti $TMPF ovs "local_ip = $LOC_TUN_IP"  
   susti $TMPF ovs "bridge_mappings = external:br-ex"
   susti $TMPF ovs "tunnel_bridge = br-tun"
   susti $TMPF agent "tunnel_types = gre"
@@ -1037,7 +1039,8 @@ install_nova_node_neutron () {
   susti $TMPF securitygroup "enable_security_group = True"
   susti $TMPF securitygroup "enable_ipset = True"
   susti $TMPF securitygroup "firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver"
-  susti $TMPF ovs "local_ip = $IPPR_T"21""
+  LOC_IP_TUN=$(ip a |grep $IPPR_T |awk '{print $2}'|awk -F/ '{print $1}')
+  susti $TMPF ovs "local_ip = $LOC_IP_TUN"
   susti $TMPF ovs "tunnel_bridge = br-tun"
   susti $TMPF agent "tunnel_types = gre"
 
