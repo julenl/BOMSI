@@ -387,19 +387,14 @@ basic_net_tunnel (){
 
   cat > /etc/sysconfig/network-scripts/ifcfg-$2 << EOF
 BOOTPROTO="static"
-DEFROUTE="yes"
+DEFROUTE="no"
 IPV6INIT="yes"
-IPV6_AUTOCONF="yes"
-IPV6_DEFROUTE="yes"
-IPV6_PEERDNS="yes"
-IPV6_PEERROUTES="yes"
-IPV6_FAILURE_FATAL="no"
 NAME="$2"
 DEVICE=$2
 ONBOOT="yes"
 IPADDR=$1
 NETMASK=$NETMASK
-GATEWAY=$GATEWAY2
+NM_CONTROLLED="no"
 EOF
 
 ## If the device name looks like a VLAN
@@ -409,6 +404,13 @@ if [[ $1 == *"."* ]] || [[ $1 == *":"* ]]; then
 else
   echo "TYPE='Ethernet'" >> /etc/sysconfig/network-scripts/ifcfg-$2
 fi
+
+## Disable the NetworkManager service and use the regular "network" instead
+chkconfig NetworkManager off
+systemctl stop NetworkManager
+pkill -9 NetworkManager
+chkconfig network on
+service network start
 
 ifup $2
 }
@@ -466,6 +468,13 @@ ifconfig $1 promisc
 ifup $1
 #ifconfig $IFACE0
 }
+
+
+
+
+
+
+
 
 
 
