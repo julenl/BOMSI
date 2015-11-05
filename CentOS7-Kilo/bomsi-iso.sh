@@ -38,8 +38,8 @@ echo "VM Name MAIN" $VM_NAME
 export BOOT_TIMEOUT="100"   # time until the iso bootloaders loads the default option (seconds x10)
 export OUT_DIR="/tmp/custom_iso"
 export OUT_ISO_DIR="$HOME"  
-export PKG_DIR="~/centos_packages"
-export PATH_TO_ISO="~/ISOS/CentOS-7-x86_64-Minimal-1503-01.iso"
+export PKG_DIR="$HOME/centos_packages"
+export PATH_TO_ISO="$HOME/ISOS/CentOS-7-x86_64-Minimal-1503-01.iso"
 [ -z ${OUT_ISO_NAME+x} ] && OUT_ISO_NAME="BOMSI-${VM_NAME}.iso"
 [ ! -z ${HD+x} ] || export HD="vda" # name of the disk where the system will be installed
 
