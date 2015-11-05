@@ -842,9 +842,9 @@ install_neutron_node () {
  . /tmp/bomsi_{vars,lib_conf}
    print_title "install_neutron_node"
 
-  ifdown $IFACE2
+  ifdown $IFACE_EXT
   ## Configure the external network
-  basic_net_ext $IFACE2
+  basic_net_ext $IFACE_EXT
 
   selinux_firewall_off
 
@@ -954,7 +954,7 @@ configure_openvswitch () {
 
   ovs-vsctl add-br br-ex
   
-  ovs-vsctl add-port br-ex $IFACE2
+  ovs-vsctl add-port br-ex $IFACE_EXT
   #ovs-vsctl add-port br-ex $(LC_ALL=C /sbin/route | grep default |awk -- '{ print $8 }')
 
   #For testing purposes disable generic receive offload (GRO)
@@ -1092,8 +1092,8 @@ create_neutron_networks () {
  #export VIRT_NET_POOL_G="192.168.100.1"  #Gateway
  #export VIRT_NET_POOL_N="192.168.100.0/24" #Network
 
- export VIRT_NET_POOL_S=$IPPR_A'90'  #1st IP in range
- export VIRT_NET_POOL_E=$IPPR_A'99'  #last IP
+ export VIRT_NET_POOL_S=$IPPR_A'80'  #1st IP in range
+ export VIRT_NET_POOL_E=$IPPR_A'90'  #last IP
  export VIRT_NET_POOL_G=$GATEWAY  #Gateway
  export VIRT_NET_POOL_N=$IPPR_A'0/24' #Network
 
@@ -1108,20 +1108,16 @@ create_neutron_networks () {
   --allocation-pool start=$VIRT_NET_POOL_S,end=$VIRT_NET_POOL_E \
   --disable-dhcp --gateway $VIRT_NET_POOL_G
 
-# neutron subnet-create ext-net --name ext-subnet \
-#  --allocation-pool start=$VIRT_NET_POOL_S,end=$VIRT_NET_POOL_E \
-#  --disable-dhcp --gateway $VIRT_NET_POOL_G $VIRT_NET_POOL_N
-
  #Create tenant network
  neutron net-create demo-net
  neutron subnet-create demo-net 192.168.1.0/24 \
   --name demo-subnet --gateway 192.168.1.1
-# neutron subnet-create demo-net --name demo-subnet \
-#  --gateway 192.168.1.1 192.168.1.0/24
 
  neutron router-create demo-router
  neutron router-interface-add demo-router demo-subnet
  neutron router-gateway-set demo-router ext-net
+
+
  #To remove
  #neutron router-gateway-clear demo-router ext-net
  #neutron router-interface-delete demo-router demo-subnet
@@ -1341,7 +1337,6 @@ install_cinder_node () {
 
   #susti $TMPF DEFAULT "my_ip = $CONTROLLER_IP"
    ## Find the local IP in the Management net (assuming it is in $IFACE0 interface)
-#  MY_MGM_IP=`LC_ALL=C ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'`
     MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
 
   cat > /etc/rsyncd.conf<<EOF
@@ -1516,7 +1511,6 @@ install_swift_node () {
  #mount /srv/node/$DISK1"1"
  #mount /srv/node/$DISK2"1"
 
- # MY_MGM_IP=`LC_ALL=C ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' &&`
 
   MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
 

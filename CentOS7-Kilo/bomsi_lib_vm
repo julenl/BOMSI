@@ -150,11 +150,10 @@ set_vm_swift () {
 gen_vnet () {
   ## Usage: gen_vnet NAME NET virbr"N" (i.e. virbr1: gen_vnet management 10.0.0.1 1)
 if [[ ! $(virsh net-list |grep $1) ]]; then
+echo ">> Generating virtual network: " $1 " with gateway on " $2
 NEW_MAC=$(printf '00:60:2F:%02X:%02X:%02X' $[RANDOM%256] $[RANDOM%256] $[RANDOM%256])
 NEXT_FREE_VIRT_IFACE=$(brctl show |grep virbr |tail -1 |awk '{print $1}' |awk -Fvirbr '{print $2+1}') # The last +1 makes the increment
-echo "testA0" $NEXT_FREE_VIRT_IFACE
 #((NEXT_FREE_VIRT_IFACE++)) # increment the last found value in one
-echo "testA"
 cat > /tmp/xmlnetfile << EOF
 <network connections='2'>
 <name>$1</name>
@@ -169,7 +168,6 @@ cat > /tmp/xmlnetfile << EOF
 </ip>
 </network>
 EOF
-echo "testB"
 
 #virsh net-create /tmp/xmlnetfile #dissapears after reboot
 virsh net-define /tmp/xmlnetfile
@@ -187,7 +185,6 @@ start_iso_vm () {
   #set -x
 
   ## If KVM is not installed, install it
- echo "test1"
   which virsh || sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils
 
 
@@ -230,7 +227,7 @@ start_iso_vm () {
   fi
 
   ls /var/lib/libvirt/images/$TMPNAME.img && sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img
-  ###qemu-img create -f raw /var/lib/libvirt/images/$TMPNAME.img #4G 
+  qemu-img create -f raw /var/lib/libvirt/images/$TMPNAME.img ${DS}G 
 
   echo "Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME
 "
@@ -466,6 +463,8 @@ EOF
 echo "ifconfig $IFACE1 promisc" >> /etc/rc.local
 ifconfig $1 promisc
 ifup $1
+ip link set dev $1 promisc on
+
 #ifconfig $IFACE0
 }
 
