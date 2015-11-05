@@ -178,6 +178,7 @@ fi
 
 
 start_iso_vm () {
+  echo " "
   echo "------------------------"
   echo ">> Starting VM with qemu" 
   echo "------------------------"
@@ -185,8 +186,8 @@ start_iso_vm () {
   #set -x
 
   ## If KVM is not installed, install it
-  which virsh || sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils >> /tmp/installed_by_bomsi.log
-  which virt-install || sudo apt-get -y install virtinst >> /tmp/installed_by_bomsi.log
+  which virsh > /dev/null || sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils >> /tmp/installed_by_bomsi.log
+  which virt-install > /dev/null || sudo apt-get -y install virtinst >> /tmp/installed_by_bomsi.log
 
 
   gen_vnet management 10.0.0.1
@@ -203,7 +204,7 @@ start_iso_vm () {
   if [ -z $VIRT_NIC_MAN ]; then VIRT_NIC_MAN="network=management"; fi
   
   ## Make sure the user has permission to create VMs
-  sudo chmod 777 /var/lib/libvirt/images/
+  sudo chmod 777 /var/lib/libvirt/images/  > /dev/null 
  
   ## Delete an old VM with the same name
   #virsh list --all |grep $TMPNAME |grep running > /dev/null && virsh destroy $TMPNAME 
@@ -213,7 +214,6 @@ start_iso_vm () {
 
 
   vm_status=$(sudo virsh list |grep $TMPNAME|awk '{print $3}')
-  echo "A " $TMPNAME $vm_status
   if [ "$vm_status" == "running" ]; then
     sudo virsh destroy $TMPNAME && echo "VM " $TMPNAME " Down"
   fi
