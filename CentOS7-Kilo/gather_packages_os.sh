@@ -51,7 +51,7 @@ openstack-ceilometer-compute python-ceilometerclient python-pecan
  
 """
 
-ssh-keygen -f "/home/julen/.ssh/known_hosts" -R $IPTMP
+ssh-keygen -f "~/.ssh/known_hosts" -R $IPTMP
 sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$IPTMP mkdir -p /tmp/tmp-pkg/
 
 sshpass -p $ROOT_PASSWORD ssh root@$IPTMP yum -y install --downloaddir /tmp/tmp-pkg/ http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm 
