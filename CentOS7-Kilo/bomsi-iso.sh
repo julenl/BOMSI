@@ -67,7 +67,7 @@ mkdir -p $OUT_DIR/files/{ks,postinstall}
 ## If original ISO file does not exist, get one:
 #wget ftp://mirror.fraunhofer.de/centos.org/7/isos/x86_64/CentOS-7-x86_64-Minimal-1503-01.iso ~/ISOS
 ## Otherwise use some other mirror closer to your location
-which curl || sudo apt-get -y install curl
+which curl || sudo apt-get -y install curl >> /tmp/installed_by_bomsi.log
 if [ ! -f $PATH_TO_ISO ]; then
   mkdir -p ${PATH_TO_ISO%/*} > /dev/null 
   curl -o $PATH_TO_ISO  ftp://mirror.fraunhofer.de/centos.org/7/isos/x86_64/CentOS-7-x86_64-Minimal-1503-01.iso
@@ -136,7 +136,7 @@ cp -r $THISD/bomsi* $OUT_DIR/files/postinstall/
 
 
 
-which createrepo || sudo apt-get -y install createrepo genisoimage
+which createrepo || sudo apt-get -y install createrepo genisoimage >> /tmp/installed_by_bomsi.log
 
 echo ">> Creating repository index in $OUT_DIR/comps.xml... "
 cd $OUT_DIR/files
@@ -157,7 +157,7 @@ sudo /usr/bin/genisoimage -untranslated-filenames -volid 'CentOS7' \
          -o $OUT_ISO_DIR/$OUT_ISO_NAME \
          -T $OUT_DIR/files/  &> /dev/null
 
-which isohybrid &> /dev/null|| sudo apt-get -y install syslinux-utils || sudo apt-get -y install syslinux
+which isohybrid &> /dev/null|| sudo apt-get -y install syslinux-utils >> /tmp/installed_by_bomsi.log || sudo apt-get -y install syslinux >> /tmp/installed_by_bomsi.log
 sudo isohybrid --uefi $OUT_ISO_DIR/$OUT_ISO_NAME #&> /dev/null
 
 

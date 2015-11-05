@@ -170,9 +170,9 @@ cat > /tmp/xmlnetfile << EOF
 EOF
 
 #virsh net-create /tmp/xmlnetfile #dissapears after reboot
-virsh net-define /tmp/xmlnetfile
-virsh net-start $1
-virsh net-autostart $1 
+sudo virsh net-define /tmp/xmlnetfile
+sudo virsh net-start $1
+sudo virsh net-autostart $1 
 fi
 }
 
@@ -185,8 +185,8 @@ start_iso_vm () {
   #set -x
 
   ## If KVM is not installed, install it
-  which virsh || sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils
-  which virt-install || sudo apt-get -y install virtinst
+  which virsh || sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils >> /tmp/installed_by_bomsi.log
+  which virt-install || sudo apt-get -y install virtinst >> /tmp/installed_by_bomsi.log
 
 
   gen_vnet management 10.0.0.1
@@ -215,20 +215,20 @@ start_iso_vm () {
   vm_status=$(virsh list |grep $TMPNAME|awk '{print $3}')
   echo "A " $TMPNAME $vm_status
   if [ "$vm_status" == "running" ]; then
-    virsh destroy $TMPNAME && echo "VM " $TMPNAME " Down"
+    sudo virsh destroy $TMPNAME && echo "VM " $TMPNAME " Down"
   fi
 
   vm_status=$(virsh list --all |grep $TMPNAME|awk '{print $3}')
   echo "$(virsh list |grep $TMPNAME)"
   if [ "$vm_status" == "shut" ]; then
     echo ">> Remove $TMPNAME and delete the associated virtual disk(s)"
-    virsh undefine $TMPNAME
-    virsh vol-delete --pool default $TMPNAME.img && echo "VM " $TMPNAME " succesfully removed"
+    sudo virsh undefine $TMPNAME
+    sudo virsh vol-delete --pool default $TMPNAME.img && echo "VM " $TMPNAME " succesfully removed"
     ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
   fi
 
   ls /var/lib/libvirt/images/$TMPNAME.img && sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img
-  qemu-img create -f raw /var/lib/libvirt/images/$TMPNAME.img ${DS}G 
+  sudo qemu-img create -f raw /var/lib/libvirt/images/$TMPNAME.img ${DS}G 
 
   echo "Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME
 "
@@ -236,14 +236,14 @@ start_iso_vm () {
   
   if [[ $TMPNAME == *"block"* ]]; then
      echo "Creating a \"block\" VM"
-     virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --disk path=/var/lib/libvirt/images/$TMPNAME-HD.img,device=disk,bus=virtio,size=$DS_B --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
+     sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --disk path=/var/lib/libvirt/images/$TMPNAME-HD.img,device=disk,bus=virtio,size=$DS_B --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
   elif [[ $TMPNAME == *"object"* ]]; then
      echo "Creating an \"object\" VM"
-     virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --disk path=/var/lib/libvirt/images/$TMPNAME-HD1.img,device=disk,bus=virtio,size=$DS_O --disk path=/var/lib/libvirt/images/$TMPNAME-HD2.img,device=disk,bus=virtio,size=$DS_O --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
+     sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --disk path=/var/lib/libvirt/images/$TMPNAME-HD1.img,device=disk,bus=virtio,size=$DS_O --disk path=/var/lib/libvirt/images/$TMPNAME-HD2.img,device=disk,bus=virtio,size=$DS_O --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
   else
     echo "Using command:"
     echo """ virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME""" 
-    virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
+    sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
   fi
 
 }
