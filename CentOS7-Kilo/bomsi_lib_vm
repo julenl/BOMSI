@@ -227,7 +227,9 @@ start_iso_vm () {
     ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
   fi
 
-  ls /var/lib/libvirt/images/$TMPNAME.img && sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img
+  ls /var/lib/libvirt/images/$TMPNAME.img > /dev/null && sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img > /dev/null
+
+  echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
   sudo qemu-img create -f raw /var/lib/libvirt/images/$TMPNAME.img ${DS}G 
 
   echo "Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME

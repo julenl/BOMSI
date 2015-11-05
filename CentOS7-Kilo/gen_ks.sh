@@ -32,7 +32,7 @@ for NODE in controller compute1 compute2 compute3 network block object;
     #echo "NODE" $NODE
     if [[ $VM_NAME == *"$NODE"* ]]; then
       declare "KS_$NODE"=' menu default \n'
-      echo ">> The $NODE will be set as default on the installer menu" 
+      echo ">> The \'$NODE\' node will be set as default on the installer menu" 
       KS_SET="YES"
     fi
   done
@@ -240,7 +240,10 @@ case "\$1" in
     . /tmp/bomsi_lib_vm
     N=1
     while ! ping -c1 centos.org; do sleep 1 && N=[$N+1] && echo $N `date` > ~/wait.log ; done
+    yum -y install http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
+    yum -y install http://rdo.fedorapeople.org/openstack-kilo/rdo-release-kilo.rpm    
     yum -y update
+    yum -y upgrade
     yum -y install openstack-selinux selinux-policy deltarpm yum-utils python-chardet python-kitchen ntp yum-plugin-priorities audit-libs-python checkpolicy libcgroup libsemanage-python policycoreutils-python python-IPy setools-libs net-tools nmap sshpass
     #yum -y install epel-release rdo-relase-kilo
 
