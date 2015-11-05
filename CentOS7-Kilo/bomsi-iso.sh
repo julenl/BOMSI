@@ -98,7 +98,7 @@ mv -f $OUT_DIR/*comps.xml $OUT_DIR/comps.xml
 
 
 echo ">> Copying packages from $PKG_DIR/ to $OUT_DIR/files/Packages/ "
-rsync -a $PKG_DIR/ $OUT_DIR/files/Packages/ &> /tmp/rsync.log ||echo "ERROR: Probably $PKG_DIR/ does not exist" #&& exit
+rsync -a $PKG_DIR/ $OUT_DIR/files/Packages/ &> /tmp/rsync.log ||echo "WARNING: Probably $PKG_DIR/ does not exist. Packages will be downloaded fully from the internet" #&& exit
 
 
 ## Generate Kickstart files

@@ -15,21 +15,36 @@ The current version of BOMSI is developped using Ubuntu as the host for generati
 
 ## QUICK START
 
-In order to build a full featured OpenStack environment on 5 virtual nodes, type this:
 
-for NODE in controller compute1 network block object; do ./bomsi-iso.sh -n=$NODE; done
+>> Downloading these files and getting to the right directory
+  git clone https://github.com/julenl/BOMSI.git
+  cd BOMSI/CentOS7-Kilo/
+
+
+
+>> Build the classical 3 node set up on local virtual machines
+
+  for NODE in controller compute1 network; do ./bomsi-iso.sh -n=1.$NODE; done
+
+
+>> Build a 5 node set up, with cinder and swift (this might not be working 100%)
+
+  for NODE in controller compute1 network block object; do ./bomsi-iso.sh -n=$NODE; done
 
 This will create 5 different ISO files named BOMSI-controller.iso, BOMSI-compute1.iso, BOMSI-network.iso, BOMSI-block.iso and BOMSI-object.iso, and for each of them it will start a virtual machine in your local machine using virsh. If you do not have the virtual networks called management, tunnel and storage, it will create them as 10.0.0.0, 10.0.1.0 and 10.0.2.0.
 The "-n" option specifies the virtual machine name and it also sets the default kickstart boot option to that type of machine, so it goes fully unattended. The "-o" option specifies the output ISO file name, and it is good to specify a different one for each machine, so that the files do not get overwritten by the next iteration in the "for" loop before the are completely installed.
 
 
-If your local computer is not so powerfull, you can just create a minimal install, just with a compute and a network node, just by:
-for NODE in controller compute1 network; do ./bomsi-iso.sh -n=1.$NODE; done
+>> Creating an emty CentOS7 machine, for example, as a proxy for downloading the packages:
+  ./bomsi-iso.sh -n=packages
 
-Install a machine for using it as a proxy to download all the packages:
-./bomsi-iso.sh -n=packages
 This will kicstart an empty CentOS 7 installation with IP 10.0.0.254 (the default one for "gather_packages.sh").
- 
+
+
+>> Creating a multiboot pendrive
+  ./bomsi-iso.sh -u=/dev/sdb -n=network
+
+This will create an iso with the "network" node set as default on the boot menu, it will copy it to the disk (pen-drive) associated to the device "/dev/sdb" and will launch a local instance to check if the pendrive works properly
  
 github: https://github.com/julenl/BOMSI/CentOS7-Kilo/
 
@@ -94,6 +109,9 @@ bomsi-iso.sh:
 - Add the possibility to use containers
 - Add the possibility to install Ceph
 
+
+This file was taken from:
+github: https://github.com/julenl/BOMSI/CentOS7-Kilo/
 
 
 
