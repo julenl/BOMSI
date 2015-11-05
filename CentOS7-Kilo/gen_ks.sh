@@ -260,10 +260,10 @@ fi
 
 ## If NO_FIRSTRUN is set, do not activate firstrun script
 if [ ! -z ${NO_FIRSTRUN+x} ]; then
- echo "Not executing /etc/init.d/firstrun_$NAME_HOST on next boot"
+ #echo "Not executing /etc/init.d/firstrun_$NAME_HOST on next boot"
  FIRSTRUN_EXE_STR=''
 else
- echo "Executing firstrun script as /etc/init.d/firstrun_$NAME_HOST"
+ #echo "Executing firstrun script as /etc/init.d/firstrun_$NAME_HOST"
  FIRSTRUN_EXE_STR="chkconfig --add firstrun_$NAME_HOST on
  chkconfig --level 345 firstrun_$NAME_HOST on"
 fi

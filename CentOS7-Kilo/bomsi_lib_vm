@@ -15,25 +15,25 @@ bomsi_vars_version () {
 
 rm_vm () {
 #Delete the given VM and the data related to it
-vm_status=$(virsh list |grep $1|awk '{print $3}')
+vm_status=$(sudo virsh list |grep $1|awk '{print $3}')
 echo "A " $1 $vm_status
 if [ "$vm_status" == "running" ]; then
-  virsh destroy $1 && echo "VM " $1 " Down"
+  sudo virsh destroy $1 && echo "VM " $1 " Down"
 fi
-vm_status=$(virsh list --all |grep $1|awk '{print $3}')
+vm_status=$(sudo virsh list --all |grep $1|awk '{print $3}')
 echo "B " $1 $vm_status
-echo "$(virsh list |grep $1)"
+echo "$(sudo virsh list |grep $1)"
 if [ "$vm_status" == "shut" ]; then
-  virsh undefine $1
-  virsh vol-delete --pool default $1.img && echo "VM " $1 " succesfully removed"  
+  sudo virsh undefine $1
+  sudo virsh vol-delete --pool default $1.img && echo "VM " $1 " succesfully removed"  
 fi
 }
 
 clone_vm () {
  ## Usage: clone_vm ORIGINAL_VM_NAME  NEW_VM_NAME
  ## Create only if VM does not exist in the hypervisor
- virsh --connect qemu:///system domstate $2 > /dev/null 2>&1 || \
- virt-clone --force --connect qemu:///system -o $1 -n $2  -f /var/lib/libvirt/images/$2.img
+ sudo virsh --connect qemu:///system domstate $2 > /dev/null 2>&1 || \
+ sudo virt-clone --force --connect qemu:///system -o $1 -n $2  -f /var/lib/libvirt/images/$2.img
     #virsh --connect qemu:///system start $2
 }
 
@@ -149,7 +149,7 @@ set_vm_swift () {
 
 gen_vnet () {
   ## Usage: gen_vnet NAME NET virbr"N" (i.e. virbr1: gen_vnet management 10.0.0.1 1)
-if [[ ! $(virsh net-list |grep $1) ]]; then
+if [[ ! $(sudo virsh net-list |grep $1) ]]; then
 echo ">> Generating virtual network: " $1 " with gateway on " $2
 NEW_MAC=$(printf '00:60:2F:%02X:%02X:%02X' $[RANDOM%256] $[RANDOM%256] $[RANDOM%256])
 NEXT_FREE_VIRT_IFACE=$(brctl show |grep virbr |tail -1 |awk '{print $1}' |awk -Fvirbr '{print $2+1}') # The last +1 makes the increment
@@ -212,14 +212,14 @@ start_iso_vm () {
   #echo "TMPNAME="$TMPNAME
 
 
-  vm_status=$(virsh list |grep $TMPNAME|awk '{print $3}')
+  vm_status=$(sudo virsh list |grep $TMPNAME|awk '{print $3}')
   echo "A " $TMPNAME $vm_status
   if [ "$vm_status" == "running" ]; then
     sudo virsh destroy $TMPNAME && echo "VM " $TMPNAME " Down"
   fi
 
-  vm_status=$(virsh list --all |grep $TMPNAME|awk '{print $3}')
-  echo "$(virsh list |grep $TMPNAME)"
+  vm_status=$(sudo virsh list --all |grep $TMPNAME|awk '{print $3}')
+  echo "$(sudo virsh list |grep $TMPNAME)"
   if [ "$vm_status" == "shut" ]; then
     echo ">> Remove $TMPNAME and delete the associated virtual disk(s)"
     sudo virsh undefine $TMPNAME
