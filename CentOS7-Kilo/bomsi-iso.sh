@@ -28,10 +28,6 @@ export THISD=${PWD}
 CMDL_VARS="$@"
 source get_args.sh
 
-echo "RP= " $ROOT_PASSWORD
-echo "VM Name MAIN" $VM_NAME
-
-
 ## VARIABLES (if the are not set, they'll get default values)
 [ -z ${ROOT_PASSWORD+x} ] || ROOT_PASSWORD="1234" #Root/User password for CentOS
 
@@ -157,7 +153,7 @@ sudo /usr/bin/genisoimage -untranslated-filenames -volid 'CentOS7' \
          -o $OUT_ISO_DIR/$OUT_ISO_NAME \
          -T $OUT_DIR/files/  &> /dev/null
 
-which isohybrid &> /dev/null|| sudo apt-get -y install syslinux-utils >> /tmp/installed_by_bomsi.log || sudo apt-get -y install syslinux >> /tmp/installed_by_bomsi.log
+which isohybrid &> /dev/null|| sudo apt-get -y install syslinux >> /tmp/installed_by_bomsi.log || sudo apt-get -y install syslinux-utils >> /tmp/installed_by_bomsi.log
 sudo isohybrid --uefi $OUT_ISO_DIR/$OUT_ISO_NAME #&> /dev/null
 
 
