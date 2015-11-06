@@ -184,8 +184,7 @@ start_iso_vm () {
   #set -x
 
   ## If KVM is not installed, install it
-  which virsh > /dev/null || echo ">> Installing all the KVM packages" && sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils >> /tmp/installed_by_bomsi.log
-  which virt-install > /dev/null || sudo apt-get -y install virtinst virt-mangager >> /tmp/installed_by_bomsi.log && sudo adduser $USER libvirtd && sudo adduser $USER kvm
+  which virsh > /dev/null || echo ">> Installing all the KVM packages" && sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid install virtinst virt-mangager /tmp/installed_by_bomsi.log && sudo adduser $USER libvirtd && sudo adduser $USER kvm
 
 
   gen_vnet management ${IPPR_A}1
