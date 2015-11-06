@@ -39,8 +39,8 @@ export PATH_TO_ISO="$HOME/ISOS/CentOS-7-x86_64-Minimal-1503-01.iso"
 [ -z ${OUT_ISO_NAME+x} ] && OUT_ISO_NAME="BOMSI-${VM_NAME}.iso"
 [ ! -z ${HD+x} ] || export HD="vda" # name of the disk where the system will be installed
 
-[ ! -z ${HCPUS+x} ] || export VCPUS=4 # No. of virtual CPUs for each test VM
-[ ! -z ${VRAM+x} ]  || export VRAM=4092 # Mb of RAM for test VMs i.e. 8192
+[ ! -z ${HCPUS+x} ] || export VCPUS=2 # No. of virtual CPUs for each test VM
+[ ! -z ${VRAM+x} ]  || export VRAM=2048 # Mb of RAM for test VMs i.e. 8192
 
 
 export NETMASK="255.255.255.0"

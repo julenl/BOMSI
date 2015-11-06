@@ -16,12 +16,10 @@ bomsi_vars_version () {
 rm_vm () {
 #Delete the given VM and the data related to it
 vm_status=$(sudo virsh list |grep $1|awk '{print $3}')
-echo "A " $1 $vm_status
 if [ "$vm_status" == "running" ]; then
   sudo virsh destroy $1 && echo "VM " $1 " Down"
 fi
 vm_status=$(sudo virsh list --all |grep $1|awk '{print $3}')
-echo "B " $1 $vm_status
 echo "$(sudo virsh list |grep $1)"
 if [ "$vm_status" == "shut" ]; then
   sudo virsh undefine $1
@@ -187,7 +185,7 @@ start_iso_vm () {
 
   ## If KVM is not installed, install it
   which virsh > /dev/null || echo ">> Installing all the KVM packages" && sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils >> /tmp/installed_by_bomsi.log
-  which virt-install > /dev/null || sudo apt-get -y install virtinst >> /tmp/installed_by_bomsi.log
+  which virt-install > /dev/null || sudo apt-get -y install virtinst virt-mangager >> /tmp/installed_by_bomsi.log && sudo adduser $USER libvirtd && sudo adduser $USER kvm
 
 
   gen_vnet management ${IPPR_A}1
