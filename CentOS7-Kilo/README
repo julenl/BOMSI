@@ -13,8 +13,21 @@ After creating the ISO file, BOMSI can either launch it as a virtual machine in 
 The current version of BOMSI is developped using Ubuntu as the host for generating the ISO file and the OpenStack is installed using CentOS7 as operative system. 
 
 
-## QUICK START
+## Bugs and questions
+- If you have some question about BOMSI
+- If it is not working for you
+- If you want to report a bug
+- If you want to make some changes in the code but you don't know how
 
+Contact e-mail(*): bomsi at larrucea dot eu
+
+(* BOMSI is a project created voluntarily, without any waranty or responsability from the author. However, if you need some help with getting it running for testing purposes, just ask.)
+
+This code can be found at:
+github: https://github.com/julenl/BOMSI/CentOS7-Kilo/
+
+
+## QUICK START
 
 >> Downloading these files and getting to the right directory
   git clone https://github.com/julenl/BOMSI.git
@@ -27,6 +40,7 @@ The current version of BOMSI is developped using Ubuntu as the host for generati
   for NODE in controller compute1 network; do ./bomsi-iso.sh -n=1.$NODE; done
 
 
+
 >> Build a 5 node set up, with cinder and swift (this might not be working 100%)
 
   for NODE in controller compute1 network block object; do ./bomsi-iso.sh -n=$NODE; done
@@ -35,10 +49,12 @@ This will create 5 different ISO files named BOMSI-controller.iso, BOMSI-compute
 The "-n" option specifies the virtual machine name and it also sets the default kickstart boot option to that type of machine, so it goes fully unattended. The "-o" option specifies the output ISO file name, and it is good to specify a different one for each machine, so that the files do not get overwritten by the next iteration in the "for" loop before the are completely installed.
 
 
+
 >> Creating an emty CentOS7 machine, for example, as a proxy for downloading the packages:
   ./bomsi-iso.sh -n=packages
 
 This will kicstart an empty CentOS 7 installation with IP 10.0.0.254 (the default one for "gather_packages.sh").
+
 
 
 >> Creating a multiboot pendrive
@@ -46,7 +62,6 @@ This will kicstart an empty CentOS 7 installation with IP 10.0.0.254 (the defaul
 
 This will create an iso with the "network" node set as default on the boot menu, it will copy it to the disk (pen-drive) associated to the device "/dev/sdb" and will launch a local instance to check if the pendrive works properly
  
-github: https://github.com/julenl/BOMSI/CentOS7-Kilo/
 
 
 ## Workflow of BOMSI
