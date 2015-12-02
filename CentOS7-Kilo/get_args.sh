@@ -20,15 +20,15 @@ Default configurations are provided for any name (-n) containing controller, com
 
 Examples:
 Create an ISO image with a boot menu which allows to select which machine is going to be installed:
-./custom-iso.sh
+./bomsi-iso.sh
 
 Create the previous ISO image and test it on a virtual machine called \"1.controller\":
-./custom-iso.sh -n=1.controller
+./bomsi-iso.sh -n=1.controller
 
 Create an ISO for installing the first compute node and burn it onto a bootable pendrive:
 (assuming the pendrive is inserted on the system and that it is on /dev/sdb)
 (this also starts a (diskless) qemu test machine, to test that the pendrive works fine)
-./custom-iso.sh -n=compute1 -u=/dev/sdb
+./bomsi-iso.sh -n=compute1 -u=/dev/sdb
 
 """
 

@@ -1,8 +1,8 @@
-
 ##################
 ## BOMSI README ##
 ##################
 
+## Introduction
 
 BOMSI (after Bash Openstack Multinode Scripted Installer), is a flexible OpenStack written in BASH, which follows the official install guide step by step.
 
@@ -12,6 +12,17 @@ After creating the ISO file, BOMSI can either launch it as a virtual machine in 
 
 The current version of BOMSI is developped using Ubuntu as the host for generating the ISO file and the OpenStack is installed using CentOS7 as operative system. 
 
+## Hardware requirements for virtual environment
+For installing a basic OpenStack (3 node) environment in virtual machines you need at least:
+- A computer running linux (Ubuntu, Debian, CentOS, ...)
+- 4 cores (Intel i5, i7, ...)
+- Some 6 Gb of RAM
+- Some 40 Gb of space in the hard disk
+
+** Warning!!
+ Be aware that if you try to run the main BOMSI installer from a virtual machine (VMWare, VirtualBox, ... on Windows/OSX) you will be creating 3 layers of virtualization: Machine running the BOMSI scripts > OpenStack servers (controller, compute and network) > Instances on compute nodes
+Long story short: if you are using Windows, you will need at least 16 Gb RAM and it will go quite slow. I recommend you to install i.e. Ubuntu side by side with your Windows.
+Alternatively, you can just generate the ISO files and install them directly on your hypervisor.  
 
 ## Bugs and questions
 - If you have some question about BOMSI
@@ -30,15 +41,14 @@ github: https://github.com/julenl/BOMSI/CentOS7-Kilo/
 ## QUICK START
 
 >> Downloading these files and getting to the right directory
+
   git clone https://github.com/julenl/BOMSI.git
   cd BOMSI/CentOS7-Kilo/
-
 
 
 >> Build the classical 3 node set up on local virtual machines
 
   for NODE in controller compute1 network; do ./bomsi-iso.sh -n=1.$NODE; done
-
 
 
 >> Build a 5 node set up, with cinder and swift (this might not be working 100%)
