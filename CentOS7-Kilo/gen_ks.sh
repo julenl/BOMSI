@@ -205,7 +205,7 @@ for HOST in $FULL_SERVER_LIST
      ## kickstart a VM for downloading the packages as default in boot menu
      if ! ls -l $PKG_DIR > /dev/null; then
       INSTALL_FROM_INTERNET="YES"
-      PKGS_IN_DIR=$(ls -l $PKG_DIR |wc -l)
+      PKGS_IN_DIR=$(ls -l $PKG_DIR |wc -l) &> /dev/null 
        if [ "${PKGS_IN_DIR:-0}" -lt 500 ]; then
          for i in "${!VAR*}"; do unset $i; done #Unset previous "defaults"
          KS_clean=' menu default \n' 
