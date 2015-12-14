@@ -1,54 +1,40 @@
 #! /bin/bash
-
 export BOMSI_VARS_RELEASE="Kilo"
 export BOMSI_VARS_VERSION="0.1"
-## 
+##
 ## This file contains the variables used by BOMSI
 ##
 ##
 ##
-
-bomsi_vars_version () { 
-  echo "bomsi_vars version: $BOMSI_VARS_RELEASE $BOMSI_VARS_VERSION" 
+bomsi_vars_version () {
+echo "bomsi_vars version: $BOMSI_VARS_RELEASE $BOMSI_VARS_VERSION"
 }
-
-
-
-
 if [ -f /etc/redhat-release ] ; then #add /tmp to PATH only if we are in CentOS
-  if [[ ! "$PATH" == *"/tmp"* ]]; then # and not already in $PATH
-    export PATH=$PATH:/tmp
-    echo "Added /tmp for RHEL based machine"
-  fi
+if [[ ! "$PATH" == *"/tmp"* ]]; then # and not already in $PATH
+export PATH=$PATH:/tmp
+echo "Added /tmp for RHEL based machine"
 fi
-
+fi
 sustivar () {
- # Substitute the value of a variable in this file
- # Usage: sustivar "ROOT_PASSWORD=MyPassword"
- 
-  VAR=$(echo $1 |awk -F= '{print $1}')
-  sed -i "s/export[ ]$VAR[ =].*/export $1/" $THISD/bomsi_vars
-  eval export $1
+# Substitute the value of a variable in this file
+# Usage: sustivar "ROOT_PASSWORD=MyPassword"
+VAR=$(echo $1 |awk -F= '{print $1}')
+sed -i "s/export[ ]$VAR[ =].*/export $1/" $THISD/bomsi_vars
+eval export $1
 }
-
 ### VARIABLES
-
 export USE_VMS="KVM"  #"KVM" for virsh and "NO" in case the machines are already up
 #export VM_TEMPLATE_NAME="MiniCentOS7p"
-#export VM_PREF="OS-t2" 
-
-
+#export VM_PREF="OS-t2"
 ## Network Interfaces (VLANS like eth0.1 or eth0:2 also supported)
 export IFACE0=eth0
 export IFACE1=eth1
 export IFACE2=eth2
 export IFACE_EXT=eth2
-
 ## IP prefixes for Admin, Tunnel and Storage networks
-export IPPR_A=10.0.0. 
+export IPPR_A=10.0.0.
 export IPPR_T=10.0.1.
 export IPPR_S=10.0.2.
-
 export NETMASK="255.255.255.0"
 export GATEWAY_LN=1
 export GATEWAY=${IPPR_A}${GATEWAY_LN}
@@ -56,98 +42,73 @@ export GATEWAY1=$IPPR_T"1"
 export GATEWAY2=$IPPR_S"1"
 export DNS_LN=1
 export NAMESERVER=${IPPR_A}${DNS_LN}
-
 #IP of the pre-installed CentOS VM template
 export INITIAL_IP=$IPPR_A"254"
-
 export CONT_LN=11
 export CONTROLLER_IP=$IPPR_A$CONT_LN
-
 ## all controllers are running from the controller
 ## This variables are just for generating the /etc/hosts file
 export KEYSTONE_IP=${CONTROLLER_IP}
 export GLANCE_IP=${CONTROLLER_IP}
 export HORIZON_IP=${CONTROLLER_IP}
 export CINDER_IP=${CONTROLLER_IP}
-       
-
 export NOVA_IP=${CONTROLLER_IP}
 export COMPUTE_LN=31
 export COMPUTE1_IP=$IPPR_A$COMPUTE_LN
 export COMPUTE_IPS=$IPPR_A$COMPUTE_LN
 export COMPUTE_TUNIPS=$IPPR_T$COMPUTE_LN
 export COMPUTE_STOIPS=$IPPR_S$COMPUTE_LN
-
 export NEUTRON_LN=21
 export NEUTRON_NODE_IP=$IPPR_A$NEUTRON_LN
 export NEUTRON_NODE_TUNIP=$IPPR_T$NEUTRON_LN #Tunnel network
-
 export CINDER_LN=41
 export BLOCK_IPS=$IPPR_A$CINDER_LN
 export BLOCK_STOIPS=$IPPR_S$CINDER_LN #Storage Network
-
 export SWIFT_C_IP=${CONTROLLER_IP}
 export SWIFT_N_LN=51
 export SWIFT_N_IP=$IPPR_A$SWIFT_N_LN
-
 export OBJECT_IP=$IPPR_A$SWIFT_N_LN
-export OBJECT_STOIP=$IPPR_S$SWIFT_LN #Storage Network
 export HEAT_IP=${CONTROLLER_IP}
-
-
-
 ### PASSWORDS
-
 export ROOT_PASSWORD=1234
 export NEW_ROOT_PASSWORD="1234"
-
-
 export MYSQL_ROOT="Password"
 export RABBIT_USER="admin"
 export RABBIT_PASS=${MYSQL_ROOT}
-
-export KEYSTONE_DB_PASSWORD=${MYSQL_ROOT} 
+export KEYSTONE_DB_PASSWORD=${MYSQL_ROOT}
 export KEYSTONE_ADMIN_PASSWORD=${MYSQL_ROOT}
 export KEYSTONE_DEMO_PASSWORD=${MYSQL_ROOT}
 export KEYSTONE_REGION="RegionOne"
 export KEYSTONE_AUTH_TOKEN=${MYSQL_ROOT}
-
-export GLANCE_DB_PASSWORD=${MYSQL_ROOT} 
-export GLANCE_PASSWORD=${MYSQL_ROOT} 
-
+export GLANCE_DB_PASSWORD=${MYSQL_ROOT}
+export GLANCE_PASSWORD=${MYSQL_ROOT}
 export NOVA_DB_PASSWORD=${MYSQL_ROOT}
 export NOVA_PASSWORD=${MYSQL_ROOT}
-
-export NEUTRON_DB_PASSWORD=${MYSQL_ROOT} 
-export NEUTRON_PASSWORD=${MYSQL_ROOT} 
+export NEUTRON_DB_PASSWORD=${MYSQL_ROOT}
+export NEUTRON_PASSWORD=${MYSQL_ROOT}
 export METADATA_SECRET="METADATA_SECRET"
-
-export CINDER_DB_PASSWORD=${MYSQL_ROOT} 
-export CINDER_PASSWORD=${MYSQL_ROOT} 
-
-
-export SWIFT_PASSWORD=${MYSQL_ROOT} 
-
-export HEAT_PASSWORD=${MYSQL_ROOT} 
-export HEAT_DB_PASSWORD=${MYSQL_ROOT} 
+export CINDER_DB_PASSWORD=${MYSQL_ROOT}
+export CINDER_PASSWORD=${MYSQL_ROOT}
+export SWIFT_PASSWORD=${MYSQL_ROOT}
+export HEAT_PASSWORD=${MYSQL_ROOT}
+export HEAT_DB_PASSWORD=${MYSQL_ROOT}
 export HEAT_DOMAIN_PASS=${MYSQL_ROOT}
-
-export CEILOMETER_PASSWORD=${MYSQL_ROOT} 
-export CEILOMETER_DB_PASSWORD=${MYSQL_ROOT} 
-
-export TROVE_PASSWORD=${MYSQL_ROOT} 
-export TROVE_DB_PASSWORD=${MYSQL_ROOT} 
-
+export CEILOMETER_PASSWORD=${MYSQL_ROOT}
+export CEILOMETER_DB_PASSWORD=${MYSQL_ROOT}
+export TROVE_PASSWORD=${MYSQL_ROOT}
+export TROVE_DB_PASSWORD=${MYSQL_ROOT}
+#GUI variables
+export USB_DISK_DEV=sdb
+export HD=vda
+export VCPUS=2
+export VRAM=4092
+export VIRT_NIC_MAN='network=management'
+export OUT_ISO_NAME=compute1.iso
+export INSTALL_TYPE=controller
 
 ## ssh aliases for the machines
-
 controller () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $CONTROLLER_IP; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$CONTROLLER_IP; }
 network    () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $NEUTRON_NODE_IP; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$NEUTRON_NODE_IP; }
 compute1   () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $COMPUTE1_IP; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$COMPUTE1_IP; }
 block      () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $BLOCK_IPS; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$BLOCK_IPS; }
 block      () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $OBJECT_IP; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$OBJECT_IP; }
-
-
-
-
-
