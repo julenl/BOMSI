@@ -104,7 +104,7 @@ export VCPUS=2
 export VRAM=4092
 export VIRT_NIC_MAN='network=management'
 export OUT_ISO_NAME=compute1.iso
-export INSTALL_TYPE=controller
+export INSTALL_TYPE=3_nodes
 
 ## ssh aliases for the machines
 controller () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $CONTROLLER_IP; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$CONTROLLER_IP; }
