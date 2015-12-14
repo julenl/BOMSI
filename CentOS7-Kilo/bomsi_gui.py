@@ -176,7 +176,7 @@ class Main(Gtk.Window):
         table_mainvars.attach(item,0,2,2,3)
 
         tooltip='Amount of RAM memory (in Mb)\n(for virtual environments).\n i.e.: 4092'
-        item=vars_entry_unit('Disk name', 'HD', tooltip)
+        item=vars_entry_unit('Virt. RAM', 'VRAM', tooltip)
         table_mainvars.attach(item,0,2,3,4)
 
         tooltip='The name of the management\nnetwork (or bridge) for VMs\n (i.e. "network=management" or "bridge=br0")'
