@@ -233,11 +233,10 @@ def create_local_virt_env(widget, PATH_TO_BOMSI, entry):
      INSTALL_TYPE = '3_nodes'   
 
    try:
-    OUT_ISO_NAME=BOMSI_VARS['OUT_ISO_NAME'].split('.iso')[0]
+    OUT_ISO_NAME_GUI=BOMSI_VARS['OUT_ISO_NAME_GUI'].split('.iso')[0]
    except:
-    OUT_ISO_NAME='BOMSI-multiboot'
+    OUT_ISO_NAME_GUI='BOMSI-multiboot'
 
-   print INSTALL_TYPE,machine, OUT_ISO_NAME
 
    if INSTALL_TYPE == '3_nodes':
       print '##### Generating and installing the controller node ####'
