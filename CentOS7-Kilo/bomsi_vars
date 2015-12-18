@@ -103,9 +103,8 @@ export HD=vda
 export VCPUS=2
 export VRAM=4092
 export VIRT_NIC_MAN='network=management'
-export OUT_ISO_NAME=compute1.iso
-export INSTALL_TYPE=3_nodes
-
+export OUT_ISO_NAME_GUI=BOMSI-controller.iso
+export INSTALL_TYPE=controller
 ## ssh aliases for the machines
 controller () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $CONTROLLER_IP; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$CONTROLLER_IP; }
 network    () { ssh-keygen -f "$HOME/.ssh/known_hosts" -R $NEUTRON_NODE_IP; sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$NEUTRON_NODE_IP; }
