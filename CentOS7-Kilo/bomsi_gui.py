@@ -164,7 +164,7 @@ class Main(Gtk.Window):
         table_mainvars.set_col_spacings(10)
 
         tooltip='Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso'
-        item=vars_entry_unit('ISO name', 'OUT_ISO_NAME', tooltip)
+        item=vars_entry_unit('ISO name', 'OUT_ISO_NAME_GUI', tooltip)
         table_mainvars.attach(item,0,2,0,1)
 
         tooltip='Disk device in which the\nCentOS is going to\nget installed.\n i.e.: sda (for physical HDs)\nor vda (for virtual HDs'
@@ -206,13 +206,13 @@ class Main(Gtk.Window):
 
 
 
-        item=vars_entry_unit('ISO name', 'OUT_ISO_NAME', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso')
+        item=vars_entry_unit('ISO name', 'OUT_ISO_NAME_GUI', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso')
 
 
         vars_main_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         #First column of main variables tab
         vars_main_hbox_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,valign=Gtk.Align.START)
-        vars_main_hbox_vbox.pack_start(vars_entry_unit('ISO name', 'OUT_ISO_NAME', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso'), True, False, 0)
+        vars_main_hbox_vbox.pack_start(vars_entry_unit('ISO name', 'OUT_ISO_NAME_GUI', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso'), True, False, 0)
         vars_main_hbox_vbox.pack_start(vars_entry_unit('Disk name', 'HD', 'Disk device in which the\nCentOS is going to\nget installed.\n i.e.: sda'), True, False, 0)
         vars_main_hbox_vbox.pack_start(vars_entry_unit('# of VCPUs', 'VCPUS', 'Number of Virtual CPUs\n(for virtual environments).\n i.e.: 2'), False, False, 0)
         vars_main_hbox_vbox.pack_start(vars_entry_unit('RAM', 'VRAM', 'Amount of RAM memory (in Mb)\n(for virtual environments).\n i.e.: 4092'), False, False, 0)
@@ -307,9 +307,9 @@ class Main(Gtk.Window):
 
         #entry_only_iso = Gtk.Entry()
         try:
-          ISO_LABEL=bomsi_gui_lib.read_bomsi_vars(PATH_TO_BOMSI)['OUT_ISO_NAME']
+          ISO_LABEL_GUI=bomsi_gui_lib.read_bomsi_vars(PATH_TO_BOMSI)['OUT_ISO_NAME_GUI']
         except:
-          ISO_LABEL='BOMSI-multiboot.iso'
+          ISO_LABEL_GUI='BOMSI-multiboot.iso'
         #entry_only_iso.set_text(ISO_LABEL)
 
         button_only_iso = Gtk.Button()
