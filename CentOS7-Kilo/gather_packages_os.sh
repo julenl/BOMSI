@@ -16,6 +16,10 @@ IPTMP=10.0.0.254
 ## If root password (for ssh loging) was not set, put some value here.
 [ ! -z ${ROOT_PASSWORD+x} ] || ROOT_PASSWORD="1234"
 
+echo 'Downloading updated packages for the basic Operative System'
+sshpass -p $ROOT_PASSWORD ssh root@$IPTMP yum -y update --downloadonly --downloaddir /tmp/tmp-pkg/ $PKG &> /dev/null
+
+echo "Check if sshpass is installed, if not install it."
 which sshpass &> /dev/null || sudo apt-get install sshpass
 
 OSTACK_PACKAGES="""
@@ -51,9 +55,11 @@ openstack-ceilometer-compute python-ceilometerclient python-pecan
  
 """
 
+echo 'Clear the temporal IP and generate the remote temporal package dir'
 ssh-keygen -f "~/.ssh/known_hosts" -R $IPTMP
 sshpass -p $ROOT_PASSWORD ssh -o "StrictHostKeyChecking no" root@$IPTMP mkdir -p /tmp/tmp-pkg/
 
+echo 'Adding repositories to the remote machine'
 sshpass -p $ROOT_PASSWORD ssh root@$IPTMP yum -y install --downloaddir /tmp/tmp-pkg/ http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm 
 sshpass -p $ROOT_PASSWORD ssh root@$IPTMP curl -o /tmp/tmp-pkg/epel-release-7-5.noarch.rpm http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
 #sshpass -p 1234 ssh root@$IPMTP yum -y install --downloaddir /tmp/tmp-pkg/ http://rdo.fedorapeople.org/openstack-kilo/rdo-release-kilo.rpm
@@ -71,6 +77,8 @@ for PKG in $OSTACK_PACKAGES
 
 # Download all the updates
 sshpass -p $ROOT_PASSWORD ssh root@$IPTMP yum -y update --downloadonly --downloaddir /tmp/tmp-pkg/
+sshpass -p $ROOT_PASSWORD ssh root@$IPTMP yum -y upgrade --downloadonly --downloaddir /tmp/tmp-pkg/
+sshpass -p $ROOT_PASSWORD ssh root@$IPTMP yum -y update --downloaddir /tmp/tmp-pkg/
 
 # Download also these convenient configuration sample files
 OTHER_PACKAGES="""
