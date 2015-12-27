@@ -195,6 +195,32 @@ def set_selected_disk(nothing,combo,PATH_TO_BOMSI):
       print "USB_DISK was set to:",combo.get_active_text()
 
 
+def opt_packages(widget,PATH_TO_BOMSI):
+  import os,subprocess
+  os.system('sudo '+PATH_TO_BOMSI+'/bomsi-iso.sh -n=Packages')    
+  import time
+  IPTMP="10.0.0.254"
+  ROOT_PASSWORD="1234"
+  os.system('ssh-keygen -f "$HOME/.ssh/known_hosts" -R '+IPTMP)
+  CMD='sshpass -p '+ROOT_PASSWORD+' ssh -o "StrictHostKeyChecking no" root@'+IPTMP+' hostname'
+  PKGS_UP=False
+  while not PKGS_UP:
+    print "####"
+    RESPO=subprocess.Popen(CMD,shell=True, stdout=subprocess.PIPE)
+    try:
+      RESPOSTR=list(RESPO.stdout)[0]
+      PKGS_UP=True
+    except:
+      time.sleep(5)
+      print "waiting 5 more seconds for the packages VM"
+
+  print "Packages server is up, downloading..."
+  print "... this might take quite long..."
+  os.system(PATH_TO_BOMSI+'/gather_packages_os.sh ')
+  print "DONE!"
+  print "Packages stored in ~/centos_packages directory"  
+  
+
 
 
 def opt_only_iso(widget,PATH_TO_BOMSI,ISO_LABEL):

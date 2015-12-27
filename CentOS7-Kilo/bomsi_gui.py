@@ -11,7 +11,7 @@ global PATH_TO_ISO
 PWD=os.getcwd()
 PATH_TO_BOMSI=PWD
 
-print PWD, PATH_TO_BOMSI
+#print PWD, PATH_TO_BOMSI
 
 BOMSI_GUI_VERSION="0.1"
 
@@ -296,6 +296,20 @@ class Main(Gtk.Window):
 
       #Box containing possible options
 
+        #Download packages
+        vbox_packages = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        label_packages = Gtk.Label()
+        label_packages.set_markup("Download OS files\n <small>using a VM</small>")
+        logo_packages = Gtk.Image.new_from_file(PWD+'/gui_img/download_packages.png')
+        button_packages = Gtk.Button()
+        button_packages.set_image(logo_packages)
+        button_packages.connect("clicked", bomsi_gui_lib.opt_packages,PATH_TO_BOMSI)
+        vbox_packages.pack_start(label_packages, False, True, 0)
+        vbox_packages.pack_start(button_packages, False, True, 0)
+
+
+
+
         #Just create the ISO
         vbox_iso = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_only_iso = Gtk.Label()
@@ -314,7 +328,7 @@ class Main(Gtk.Window):
 
         button_only_iso = Gtk.Button()
         button_only_iso.set_image(logo_opt_iso)
-        button_only_iso.connect("clicked", bomsi_gui_lib.opt_only_iso,PATH_TO_BOMSI,ISO_LABEL)
+        button_only_iso.connect("clicked", bomsi_gui_lib.opt_only_iso,PATH_TO_BOMSI,ISO_LABEL_GUI)
 
 
         vbox_iso.pack_start(label_only_iso, False, True, 0)
@@ -340,7 +354,7 @@ class Main(Gtk.Window):
 
         DISKS=bomsi_gui_lib.get_pendrives()
         if len(DISKS) == 0:
-          print "ERROR: no pendrives detected"
+          print "Info: no pendrives detected"
           label_usb.set_markup('No pendrives\ndetected!')
           label_usb.set_tooltip_text('Close the window, connect pendrive \n and run this GUI again.')
         else:
@@ -421,6 +435,7 @@ class Main(Gtk.Window):
 
         #This is the box with the install options (only iso, pendrive, KVM) 
         row_options = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=50,halign=Gtk.Align.CENTER)
+        row_options.pack_start(vbox_packages, False, True, 0)
         row_options.pack_start(vbox_iso, False, True, 0)
         row_options.pack_start(vbox_pen, False, True, 0)
         row_options.pack_start(vbox_kvm, False, True, 0)
