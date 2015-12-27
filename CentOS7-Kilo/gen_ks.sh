@@ -32,7 +32,7 @@ for NODE in controller compute1 compute2 compute3 network block object;
     #echo "NODE" $NODE
     if [[ $VM_NAME == *"$NODE"* ]]; then
       declare "KS_$NODE"=' menu default \n'
-      echo ">> The \'$NODE\' node will be set as default on the installer menu" 
+      echo ">> The '$NODE' node will be set as default on the installer menu" 
       KS_SET="YES"
     fi
   done
@@ -126,9 +126,10 @@ for HOST in $FULL_SERVER_LIST
      OUT_FILE_KS=$OUT_PREF_KS/ks-cont.cfg
      POST_SCRIPT="""
 
+      log_step 'Running controller script'
       controller_bund
 
-      $CINDER_CONT_STR &> /tmp/A10.install_cinder_cont
+      $CINDER_CONT_STR
 
       #while ! nmap -p 873 object |grep rsync |grep open; do sleep 2 && echo 'waiting for rsync on object' ; done && \
       $SWIFT_CONT_STR &
@@ -136,8 +137,9 @@ for HOST in $FULL_SERVER_LIST
          #install_swift_controller &>/tmp/A11.install_swift_cont && \
          #finalize_swift_installation &>/tmp/A12.install_cinder_cont && \
          #sshpass -p $ROOT_PASSWORD ssh -o \"StrictHostKeyChecking no\" object touch /tmp/GREEN_LIGHT_TO_START_NODE &
-
-      $HEAT_CONT_STR
+      
+      #log_step 'Installing heat' 
+      #HEAT_CONT_STR
          #install_heat &> /tmp/A13.install_heat_cont
          #heat_template
      """
@@ -145,11 +147,15 @@ for HOST in $FULL_SERVER_LIST
      IP=$IPPR_A"31"
      OUT_FILE_KS=$OUT_PREF_KS/ks-comp1.cfg
      POST_SCRIPT="""
+     log_step 'Running compute1 script' 
      basic_net_tunnel  \${IPPR_T}31 $IFACE1
      basic_net_storage \${IPPR_S}31 $IFACE2
+     log_step 'Network interfaces configured, waiting for controller' 
      while ! nmap -p 3306 controller |grep mysql |grep open; do sleep 2 && echo 'waiting for Rabbitmq in controller' ; done
      install_nova_node
+     log_step 'Nova_node installed' 
      install_nova_node_neutron
+     log_step 'nova_node_neutron installed' 
      """
   elif [[ "$NAME_HOST" = "compute2" ]]; then
      IP=$IPPR_A"32"
@@ -203,6 +209,7 @@ for HOST in $FULL_SERVER_LIST
      POST_SCRIPT=" "
      ## If the $PKG_DIR does not exist or does not contain more than 500 packages
      ## kickstart a VM for downloading the packages as default in boot menu
+     mkdir -p $PKG_DIR
      if ! ls -l $PKG_DIR > /dev/null; then
       INSTALL_FROM_INTERNET="YES"
       PKGS_IN_DIR=$(ls -l $PKG_DIR |wc -l) &> /dev/null 
@@ -214,12 +221,13 @@ for HOST in $FULL_SERVER_LIST
      fi 
   fi
 
-  echo "#! /bin/bash" > $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
-  echo ". /tmp/bomsi_vars" >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
-  echo ". /tmp/bomsi_lib_conf" >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
-  echo ". /tmp/bomsi_lib_vm" >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
-  echo "$POST_SCRIPT"  >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
-  chmod +x $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
+   echo "#! /bin/bash" > $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
+   echo ". /tmp/bomsi_vars" >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
+   echo ". /tmp/bomsi_lib_conf" >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
+   echo ". /tmp/bomsi_lib_vm" >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
+   echo "$POST_SCRIPT"  >> $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
+   chmod +x $OUT_PREF_PI/node_scripts/setup-$NAME_HOST
+
 
   ## Script to run only on first boot, containing the different installers
   if [[ "$NAME_HOST" != "clean" ]]; then
@@ -233,25 +241,38 @@ for HOST in $FULL_SERVER_LIST
 
 case "\$1" in
   start)
-    echo "\$\$" > /root/$NAME_HOST-init.d.pid  #PID of this init.d script
-    
-    . /tmp/bomsi_vars
-    . /tmp/bomsi_lib_conf
-    . /tmp/bomsi_lib_vm
-    N=1
-    while ! ping -c1 centos.org; do sleep 1 && N=[$N+1] && echo $N `date` > ~/wait.log ; done
-    yum -y install http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
-    yum -y install http://rdo.fedorapeople.org/openstack-kilo/rdo-release-kilo.rpm    
-    yum -y update
-    yum -y upgrade
-    yum -y install openstack-selinux selinux-policy deltarpm yum-utils python-chardet python-kitchen ntp yum-plugin-priorities audit-libs-python checkpolicy libcgroup libsemanage-python policycoreutils-python python-IPy setools-libs net-tools nmap sshpass
-    #yum -y install epel-release rdo-relase-kilo
+     /bin/bash
+     echo "\$\$" > /root/$NAME_HOST-init.d.pid  #PID of this init.d script
+     echo \`date +%Y-%m-%d:%H:%M:%S\` 'Starting init.d script' |tee -a /tmp/BOMSI_STEP.log 
+     . /tmp/bomsi_vars
+     . /tmp/bomsi_lib_conf
+     . /tmp/bomsi_lib_vm
 
-    [[ \$FULL_SERVER_LIST =~ \$HOSTNAME ]] && echo 'yes' 
-    /root/postinstall/node_scripts/setup-\$HOSTNAME |tee /root/node_script.log    
-    touch ~/HOST_COMPLETED-$NAME_HOST
-    chmod -x /etc/init.d/firstrun_$NAME_HOST
-    chkconfig firstrun_$NAME_HOST off
+     #Make sure internet is working
+     N=1
+     while ! ping -c1 centos.org; do sleep 1 && N=[$N+1] && echo $N `date` > ~/wait.log ; done
+     log_step 'Internet seems to work, adding repos' 
+
+     yum -y install http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
+     yum -y install http://rdo.fedorapeople.org/openstack-kilo/rdo-release-kilo.rpm    
+     log_step 'Repos added'
+     yum -y update
+     #yum -y upgrade
+     log_step 'System updated' 
+
+     yum -y install openstack-selinux selinux-policy deltarpm yum-utils python-chardet python-kitchen ntp yum-plugin-priorities audit-libs-python checkpolicy libcgroup libsemanage-python policycoreutils-python python-IPy setools-libs net-tools nmap sshpass
+     log_step 'Common packages installed'
+     log_step 'Starting node_script' 
+ 
+     nohup /root/postinstall/node_scripts/setup-$NAME_HOST     
+ 
+    # Next part contains node specific configuration
+    # POST_SCRIPT
+ 
+     touch ~/HOST_COMPLETED-$NAME_HOST
+     chmod -x /etc/init.d/firstrun_$NAME_HOST
+     chkconfig firstrun_$NAME_HOST off
+     log_step 'init.d script finalized. Everything should be running now' 
   ;;
   stop|status|restart|reload|force-reload)
     # do nothing
@@ -381,6 +402,9 @@ chmod +x /etc/init.d/firstrun_$NAME_HOST
 chcon system_u:object_r:initrc_exec_t:s0 /etc/init.d/firstrun_$NAME_HOST
 
 $FIRSTRUN_EXE_STR
+
+#sed 's/#DefaultTimeoutStopSec=90s/#DefaultTimeoutStopSec=600s/' /etc/systemd/system.conf
+echo 'DefaultTimeoutStopSec=3600s' >> /etc/systemd/system.conf
 #chkconfig --add firstrun_$NAME_HOST on 
 #chkconfig --level 345 firstrun_$NAME_HOST on
 
