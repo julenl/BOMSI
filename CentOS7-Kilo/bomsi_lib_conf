@@ -32,6 +32,14 @@ echo -e "\n   ################### \n   #" $1 "# \n   ################### \n"
 }
 
 
+log_step (){
+  ## Usage: log_step 'Installing keystone'
+  ## Write timestamp and sentence to /tmp/BOMSI_STEP.log
+  DATE=`date +%Y-%m-%d:%H:%M:%S`
+  echo $DATE " " $1 |tee -a /tmp/BOMSI_STEP.log 
+}
+
+
 # usage: last_step INT description_of_the_step
 last_step(){
    echo "Completed until: " $1 $2 |tee -a last_step
@@ -86,21 +94,85 @@ host_exists () {
 controller_bund () {
  ## This function is just a bunddle of installer functions, for a cleaner code
  . /tmp/bomsi_{vars,lib_*}
-
+  
+  log_step 'Executing controller_bund'
+  log_step 'Executing mysqld_rabbitmq'
   mysqld_rabbitmq &> /tmp/C01.inst_rabbit.log
+  log_step 'Executing install_keystone'
   install_keystone &> /tmp/C02.inst_keystone.log
+  log_step 'Executing install_glance'
   install_glance &> /tmp/C03.inst_glance.log
+  log_step 'Executing install_nova_controller'
   install_nova_controller &> /tmp/A04.inst_nova_controller.log
+  log_step 'Executing install_neutron_controller'
   install_neutron_controller &> /tmp/A05.inst_neutron_controller.log
+  log_step 'Executing install_horizon'
   install_horizon &> /tmp/A06.inst_horizon.log 
 
-  while ! nova service-list |grep nova-compute ; do sleep 2 && echo 'waiting for compute1 node' ; done && \
-      check_compute > /root/check_compute.log &
+  #The next part is released as a child script
+  # and executed when the first nova node shows up
+  log_step 'Generating script to wait for compute1 and execute the rest'
+  cat >/tmp/controller_finish_compute.sh<<EOF 
+#! /bin/bash
+  . /tmp/bomsi_{vars,lib_*}
+  . /root/admin-openrc.sh
+  . /tmp/bomsi_lib_conf
+  log_step 'Creating /tmp/controller_finish_compute.sh '
+  while ! nova service-list |grep nova-compute 
+    do
+      sleep 10 && log_step 'waiting for compute1 node' >> /tmp/waiting4compute.log
+    done
+
+  check_compute > /tmp/check_compute.log
+  log_step 'Compute service installation finished'
+EOF
+  log_step 'Executing /tmp/controller_finish_compute.sh'
+  chmod +x /tmp/controller_finish_compute.sh
+  nohup /tmp/controller_finish_compute.sh  
+
+  cat >/tmp/controller_finish_network.sh<<EOF 
+#! /bin/bash
+  . /tmp/bomsi_{vars,lib_*}
+  . /root/admin-openrc.sh
+  . /tmp/bomsi_lib_conf
+  log_step 'Creating /tmp/controller_finish_neutron.sh '
+  while ! neutron agent-list |grep neutron-openvswitch-agent 
+    do
+      sleep 10 && log_step 'waiting for network node' >> /tmp/waiting4compute.log
+    done
+
 
   install_neutron_node_meta_nova &> /tmp/C07.install_neutron_node_meta 
   check_openvswitch &> /tmp/C08.check_openvswitch.log 
   create_neutron_networks &> /tmp/C09.create_neutron_netw.log
+  log_step 'Network service installation finished'
+EOF
+  log_step 'Executing /tmp/controller_finish_network.sh'
+  chmod +x /tmp/controller_finish_network.sh
+  nohup /tmp/controller_finish_network.sh 
       
+  cat >/tmp/controller_finish_heat.sh<<EOF 
+#! /bin/bash
+  . /tmp/bomsi_{vars,lib_*}
+  . /root/admin-openrc.sh
+  . /tmp/bomsi_lib_conf
+  log_step 'Creating /tmp/controller_finish_heat.sh '
+  while ! neutron agent-list |grep neutron-openvswitch-agent 
+    do
+      sleep 10 && log_step 'waiting for network node for heat' >> /tmp/waiting4compute.log
+    done
+  while ! nova service-list |grep nova-compute 
+    do
+      sleep 10 && log_step 'waiting for compute1 node for heat' >> /tmp/waiting4compute.log
+    done
+
+  install_heat && heat_template > /tmp/heat_template.log
+
+  log_step 'Orchestation (heat) service installation finished'
+EOF
+  log_step 'Executing /tmp/controller_finish_heat.sh'
+  chmod +x /tmp/controller_finish_heat.sh
+  nohup /tmp/controller_finish_heat.sh 
 }
 
 

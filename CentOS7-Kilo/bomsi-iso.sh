@@ -53,8 +53,8 @@ export DS_O=2 # virtual HD Size of 2 Gb for object storage
 ## Make sure isos are umounted and remove the files from previous runs
 df -h |grep /dev/loop0 > /dev/null && sudo umount /dev/loop0
 df -h |grep /dev/loop1 > /dev/null && sudo umount /dev/loop1
-rm -rf $OUT_DIR/files
-rm -rf $OUT_DIR/*comps*
+sudo rm -rf $OUT_DIR/files
+sudo rm -rf $OUT_DIR/*comps*
 
 
 
@@ -63,7 +63,7 @@ mkdir -p $OUT_DIR/files/{ks,postinstall}
 ## If original ISO file does not exist, get one:
 #wget ftp://mirror.fraunhofer.de/centos.org/7/isos/x86_64/CentOS-7-x86_64-Minimal-1503-01.iso ~/ISOS
 ## Otherwise use some other mirror closer to your location
-which curl || sudo apt-get -y install curl >> /tmp/installed_by_bomsi.log
+which curl > /dev/null || sudo apt-get -y install curl >> /tmp/installed_by_bomsi.log
 if [ ! -f $PATH_TO_ISO ]; then
   mkdir -p ${PATH_TO_ISO%/*} > /dev/null 
   curl -o $PATH_TO_ISO  ftp://mirror.fraunhofer.de/centos.org/7/isos/x86_64/CentOS-7-x86_64-Minimal-1503-01.iso
@@ -132,7 +132,7 @@ cp -r $THISD/bomsi* $OUT_DIR/files/postinstall/
 
 
 
-which createrepo || sudo apt-get -y install createrepo genisoimage >> /tmp/installed_by_bomsi.log
+which createrepo > /dev/null || sudo apt-get -y install createrepo genisoimage >> /tmp/installed_by_bomsi.log
 
 echo ">> Creating repository index in $OUT_DIR/comps.xml... "
 cd $OUT_DIR/files
@@ -153,7 +153,7 @@ sudo /usr/bin/genisoimage -untranslated-filenames -volid 'CentOS7' \
          -o $OUT_ISO_DIR/$OUT_ISO_NAME \
          -T $OUT_DIR/files/  &> /dev/null
 
-which isohybrid &> /dev/null|| sudo apt-get -y install syslinux >> /tmp/installed_by_bomsi.log || sudo apt-get -y install syslinux-utils >> /tmp/installed_by_bomsi.log
+which isohybrid > /dev/null|| sudo apt-get -y install syslinux >> /tmp/installed_by_bomsi.log || sudo apt-get -y install syslinux-utils >> /tmp/installed_by_bomsi.log
 sudo isohybrid --uefi $OUT_ISO_DIR/$OUT_ISO_NAME #&> /dev/null
 
 
