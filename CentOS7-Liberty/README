@@ -1,0 +1,142 @@
+##################
+## BOMSI README ##
+##################
+
+## Introduction
+
+BOMSI (after Bash Openstack Multinode Scripted Installer), is a flexible OpenStack written in BASH, which follows the official install guide step by step.
+
+The main driver of BOMSI (file bomsi-iso.sh) calls all the rest of functions for creating an ISO file, which will perform a fully automated installation of OpenStack using kickstart files and the bomsi_lib_conf function library, which contains functions such as "install_keystone" (which installs and configures keystone).
+
+After creating the ISO file, BOMSI can either launch it as a virtual machine in your local machine (laptop) or burn it into a pendrive to be used to boot physical servers.
+
+The current version of BOMSI is developped using Ubuntu as the host for generating the ISO file and the OpenStack is installed using CentOS7 as operative system. 
+
+## Hardware requirements for virtual environment
+For installing a basic OpenStack (3 node) environment in virtual machines you need at least:
+- A computer running linux (Ubuntu, Debian, CentOS, ...)
+- 4 cores (Intel i5, i7, ...)
+- Some 6 Gb of RAM
+- Some 40 Gb of space in the hard disk
+
+** Warning!!
+ Be aware that if you try to run the main BOMSI installer from a virtual machine (VMWare, VirtualBox, ... on Windows/OSX) you will be creating 3 layers of virtualization: Machine running the BOMSI scripts > OpenStack servers (controller, compute and network) > Instances on compute nodes
+Long story short: if you are using Windows, you will need at least 16 Gb RAM and it will go quite slow. I recommend you to install i.e. Ubuntu side by side with your Windows.
+Alternatively, you can just generate the ISO files and install them directly on your hypervisor.  
+
+## Bugs and questions
+- If you have some question about BOMSI
+- If it is not working for you
+- If you want to report a bug
+- If you want to make some changes in the code but you don't know how
+
+Contact e-mail(*): bomsi at larrucea dot eu
+
+(* BOMSI is a project created voluntarily, without any waranty or responsability from the author. However, if you need some help with getting it running for testing purposes, just ask.)
+
+This code can be found at:
+github: https://github.com/julenl/BOMSI/CentOS7-Liberty/
+
+
+## QUICK START
+
+>> Downloading these files and getting to the right directory
+
+  git clone https://github.com/julenl/BOMSI.git
+  cd BOMSI/CentOS7-Liberty/
+
+
+>> Build the classical 3 node set up on local virtual machines
+
+  for NODE in controller compute1 network; do ./bomsi-iso.sh -n=1.$NODE; done
+
+
+>> Build a 5 node set up, with cinder and swift (this might not be working 100%)
+
+  for NODE in controller compute1 network block object; do ./bomsi-iso.sh -n=$NODE; done
+
+This will create 5 different ISO files named BOMSI-controller.iso, BOMSI-compute1.iso, BOMSI-network.iso, BOMSI-block.iso and BOMSI-object.iso, and for each of them it will start a virtual machine in your local machine using virsh. If you do not have the virtual networks called management, tunnel and storage, it will create them as 10.0.0.0, 10.0.1.0 and 10.0.2.0.
+The "-n" option specifies the virtual machine name and it also sets the default kickstart boot option to that type of machine, so it goes fully unattended. The "-o" option specifies the output ISO file name, and it is good to specify a different one for each machine, so that the files do not get overwritten by the next iteration in the "for" loop before the are completely installed.
+
+
+
+>> Creating an emty CentOS7 machine, for example, as a proxy for downloading the packages:
+  ./bomsi-iso.sh -n=packages
+
+This will kicstart an empty CentOS 7 installation with IP 10.0.0.254 (the default one for "gather_packages.sh").
+
+
+
+>> Creating a multiboot pendrive
+  ./bomsi-iso.sh -u=/dev/sdb -n=network
+
+This will create an iso with the "network" node set as default on the boot menu, it will copy it to the disk (pen-drive) associated to the device "/dev/sdb" and will launch a local instance to check if the pendrive works properly
+ 
+
+
+## Workflow of BOMSI
+
+bomsi-iso.sh:
+  - Gather command line arguments
+  - If no original CentOS 7 ISO file was found, download one from the repository, and store it in the /home/user/ISOS/ directory  
+  - Mount the original CentOS 7 ISO file and copy the content to the target directory
+  - gather_packages: download all the required packages to enable full off-line installation
+      - Connect to a clean (newly installed) CentOS 7 machine, which can be created with BOMSI
+      - Download all the packages related to OpenStack and some usefull utilities into the /tmp/tmp-pkg/ directory at the remote machine
+      - Download sample configuration files also to /tmp/tmp-pkg directory at the remote machine
+      - Copy all the previously downloaded packages into the $PKG_DIR (def. /home/user/centos-packages) directory
+  - Copy all the required packages into the $OUT_DIR/files/Packages directory
+  - gen_ks: generate the kickstart files
+      - Modify tittle and timeout of boot menu in the isolinux.cfg file
+      - If the machine name contains strings such as "controller", "compute1", "network", ... set the kickstart default option to boot with that kickstart file
+      - Add all the options to the boot menu
+      - Generate the "node-script" part for each type of machine (controller, compute, network, ..)
+      - Generate a "node-script" file called setup-HOSTNAME (i.e. setup-controller)
+      - Generate the "firstrun" script at /etc/init.d/, which will run only once, after the first reboot of the clean CentOS 7
+      - Generate the kickstart files for each machine
+
+  - Generate a local repository with all the downloaded packages
+  - Set the /etc/hosts file for all the OpenStack machines
+  - Generate the ISO file using "genisoimage"
+  - Give UEFI support using the "isohybrid" tool
+
+  - If the -u=/dev/sdX or --create_use=/dev/sdX option was specified, copy the newly generated ISO file into the /dev/sdX device using "dd" and test the pendrive to check if it boots properly
+  - If -i, --install_vm, -n=NAME or --name=NAME were specified, launch a virtual machine with the newly created ISO file
+
+
+## First boot from the custom ISO
+  - The machine loads the boot menu and gives you the chance to change the machine type. There are 8 machine types:
+     - Controller node: installs mysql, rabbit, keystone, glance, nova (controller) and neutron (controller).
+       Additionally also cinder, swift and ceilometer controllers. 
+     - compute1: installs the KVM nova-node, and the nova node neutron component with openvswitch
+     - compute2: the same as compute1 but with different hostname and IP
+     - compute3: the same as compute1 but with different hostname and IP
+     - network:  installs the neutron node components
+     - block:    installs the cinder node, tryest to search for non used hard disks to use as storage devices,
+       and if none available it creates a virtual device to store the data.
+     - object:   installs the swift node, and as in the block node, if no free disks available, it creates a virtual one.
+     - clean machine: kickstarts a "clean" CentOS 7 machine, which can be used for gathering the packages (it installs already with the matching IP), or just in case you need a CentOS machine and you don't feel like clicking trough all the install process.
+     - CentOS 7: a normal non-kickstarted installation of CentOS 7 (by clicking). Same as the original ISO file.
+  - Once the machine boots from the custom ISO file, it will install CentOS7 using the kickstart options generated by the function in the gen_ks.sh file
+  - The kicktarted installation includes creating a local repository on the new machine, and copying the BOMSI files for installing OpenStack
+  - The postinstall section of the kickstart creates an an script called /etc/init.d/firstrun-"HOSTNAME", which will be executed only once after the first reboot, and will execute all the functions for installing OpenStack.
+  - After the installation of the CentOS operative system is completed, the machine will be rebooted
+  - After the boot, the /etc/init.d/firsrun-"HOSTNAME" script executes and installs everything. You can follow it by checking the logs in /tmp/ or by 'tail -f /var/log/messages"
+  - After some minutes you will be able to log in to your new dashboard on the address:
+    http://10.0.0.11/dashboard
+    username: admin
+    password: Password  (or if you whatever you changed in the bomsi_vars file)
+ 
+
+## Nice features for the TODO list:
+- Improve the bomsi_os_test by putting more tests specially about network an suggesting better solutions
+- Improve the look of the first bootloader and include more options
+- Add the possibility to use containers
+- Add the possibility to install Ceph
+
+
+This file was taken from:
+github: https://github.com/julenl/BOMSI/CentOS7-Liberty/
+
+
+

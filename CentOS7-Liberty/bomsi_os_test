@@ -1,0 +1,523 @@
+#! /bin/bash
+
+## This file contains Bash functions to test some of the potential error sources in OpenStack
+## It should be sourced and run from the machines where your already installed OpenStack using BOMSI
+
+. /tmp/bomsi_vars
+
+VERBOSE="NO"
+
+## If VERBOSE is not set (to YES) redirect everything to /dev/null
+if [ ! "$VERBOSE" == "YES" ]; then REDIRECT_DN='&> /dev/null'; fi
+
+## Set output colors
+CRED=`tput setaf 1`
+CGREEN=`tput setaf 2`
+CBLUE=`tput setaf 4`
+CNC=`tput sgr0` #No color
+
+
+
+cmdt_sctl_err () {
+ ## Usage: cmdt_sctl_err "firewalld" [(quiet)|verbose]
+ echo " "
+  
+ for SERV in "$@" 
+  do
+   if eval "systemctl status $SERV $REDIRECT_DN" ; then
+     echo "   $SERV OK"
+   else
+     echo "ERROR: service $SERV not running "
+   fi
+  done
+
+ echo " "
+}
+
+
+checkport () {
+ ## Usage: checkport port:service [port:service ...]
+
+ NSTOUT=$(netstat -tulpen)
+ echo " " 
+ for SERV in "$@"
+  do
+    PORT=$(echo $SERV |awk -F: '{print $1}')
+    SERVN=$(echo $SERV |awk -F: '{print $2}')
+
+    if eval "echo \"$NSTOUT\" |grep $PORT $REDIRECT_DN" ; then
+       echo "    $SERVN seems to be listening on port $PORT. OK"
+    else
+       echo "ERROR: Port $PORT does not seem to be listening for service$SERVN."
+    fi
+
+  done
+ echo " "
+}
+
+
+
+test_basic () {
+  echo "### SELinux"
+  echo "SELinux on $HOSTNAME=> $(getenforce)"
+
+  echo "### firewall"
+  cmdt_sctl_err firewalld
+
+  ## Basic packages
+  echo "### ntpd"
+  cmdt_stcl_err ntpd.service 
+
+
+  ### /etc/hosts
+  echo " "
+  echo "### Checking /etc/hosts file "
+  for HOST in `awk '{print $2}' /etc/hosts`
+    do 
+     if  ping -c1 $HOST |grep "From " &> /dev/null; then
+        echo "ERROR: \"$HOST\" does not resolve to $(grep $HOST /etc/hosts)"
+     elif ping -c1 $HOST |grep "icmp_seq" &> /dev/null; then
+        echo "   $HOST OK ==> $(grep $HOST /etc/hosts)"
+     fi 
+    done
+
+
+}
+
+
+reset_mysql_passwd () {
+ . /tmp/bomsi_vars
+
+systemctl stop mariadb
+
+mysqld_safe --skip-grant-tables &
+
+ mysql -u root  <<-EOF
+use mysql;
+update user set password=PASSWORD("$MYSQL_ROOT") where User='root';
+flush privileges;
+quit
+EOF
+
+systemctl start mariadb
+
+  mysql -u root -p$MYSQL_ROOT <<-EOF
+SHOW DATABASES;
+EOF
+
+}
+
+
+
+os_test_controller () {
+
+  ADMIN_OPENRC="/root/admin-openrc.sh"
+
+
+  echo "### Services listening on ports"
+  
+  checkport 123:ntp 3306:mysql 25672:rabbitmq 5672:rabbitmq 5000:keystone_url 35357:keystone_uri 11211:memcached 9292:glance 8774:nova-controller 9696:neutron-controller 
+
+
+  
+
+  echo "### MySQL/MariaDB, rabbitmq, apache, memcached"
+  cmdt_sctl_err mariadb.service rabbitmq-server.service httpd memcached
+
+  echo "### Keystone"
+
+  
+
+
+ echo "### Glance"
+ cmdt_sctl_err openstack-glance-api.service openstack-glance-registry.service
+
+ echo "### Nova controller"
+ cmdt_sctl_err  openstack-nova-api.service openstack-nova-cert.service openstack-nova-console openstack-nova-novncproxy openstack-nova-scheduler python-novaclient
+
+
+ echo "### Neutron controller"
+ cmdt_sctl_err neutron-server.service
+
+ 
+ if rpm -qa | grep openstack-cinder; then
+   echo "### Cinder controller"
+   cmdt_sctl_err openstack-cinder-api.service openstack-cinder-scheduler.service
+ else
+    echo "  >> Cinder not installed"
+ fi
+
+
+ if rpm -qa | grep openstack-swift; then
+   echo "### Swift controller"
+   cmdt_sctl_err openstack-swift-proxy.service memcached.service
+ else
+    echo "  >> Swift not installed"
+ fi
+
+ if rpm -qa | grep openstack-heat; then
+   echo "### Heat controller"
+   cmdt_sctl_err openstack-heat-api.service openstack-heat-api-cfn.service openstack-heat-engine.service
+ else
+    echo "  >> Heat not installed"
+ fi
+
+
+ if rpm -qa | grep openstack-ceilometer; then
+   echo "### Ceilometer controller" 
+   cmdt_sctl_err openstack-ceilometer-api.service openstack-ceilometer-notification.service \
+      openstack-ceilometer-central.service openstack-ceilometer-collector.service \
+      openstack-ceilometer-alarm-evaluator.service openstack-ceilometer-alarm-notifier.service
+ else
+    echo "  >> Ceilometer not installed"
+ fi
+
+ echo " "
+ echo " "
+ echo " "
+
+ echo "### Test deploy"
+
+ echo "### Rabbitmq"
+ rabbitmqctl status &> echo "  rabbitmq seems OK"|| echo "ERROR: rabbitmqctl not working"
+ 
+ echo "### MySQL/Mariadb"
+ mysql -u root -p$MYSQL_ROOT <<-EOF
+SHOW DATABASES;
+EOF
+
+ echo "### Keystone" 
+ . $ADMIN_OPENRC
+ openstack user list || echo "ERROR: keystone not working"
+ 
+ echo " "
+
+ echo "### Glance" 
+ glance image-list |grep cirros || echo "ERROR: glance not working"
+
+
+ 
+ echo " "
+ echo " "
+ echo " "
+
+
+
+ echo "### Nova"
+
+  nova service-list     && \
+ echo """>> This should have returned something like ${CGREEN}
++----+------------------+------------+----------+---------+-------+----------------------------+-----------------+
+| Id | Binary           | Host       | Zone     | Status  | State | Updated_at                 | Disabled Reason |
++----+------------------+------------+----------+---------+-------+----------------------------+-----------------+
+| 1  | nova-conductor   | controller | internal | enabled | up    | 2015-10-13T12:49:23.000000 | -               |
+| 2  | nova-cert        | controller | internal | enabled | up    | 2015-10-13T12:49:24.000000 | -               |
+| 3  | nova-consoleauth | controller | internal | enabled | up    | 2015-10-13T12:49:24.000000 | -               |
+| 4  | nova-scheduler   | controller | internal | enabled | up    | 2015-10-13T12:49:24.000000 | -               |
+| 5  | nova-compute     | compute1   | nova     | enabled | up    | 2015-10-13T12:49:21.000000 | -               |
++----+------------------+------------+----------+---------+-------+----------------------------+-----------------+${CNC} 
+""" || echo "ERROR: nova service-list did not work"
+ echo " "
+
+
+  nova endpoints     && \
+ echo """>> This should have returned something like ${CGREEN}
++-----------+----------------------------------+
+| neutron   | Value                            |
++-----------+----------------------------------+
+| id        | 86f5aa0de3cc450081a746bbe855738c |
+| interface | admin                            |
+| region    | RegionOne                        |
+| region_id | RegionOne                        |
+| url       | http://controller:9696           |
++-----------+----------------------------------+
++-----------+------------------------------------------------------------+
+| nova      | Value                                                      |
++-----------+------------------------------------------------------------+
+| id        | ace525ffcceb4a7c8252ad09ce9e4eeb                           |
+| interface | admin                                                      |
+| region    | RegionOne                                                  |
+| region_id | RegionOne                                                  |
+| url       | http://controller:8774/v2/5943b7269ad242b59bac6ce8f0e0f2d4 |
++-----------+------------------------------------------------------------+
++-----------+----------------------------------+
+| glance    | Value                            |
++-----------+----------------------------------+
+| id        | 91f993ff0e0e4e5c90bd765ec079878d |
+| interface | internal                         |
+| region    | RegionOne                        |
+| region_id | RegionOne                        |
+| url       | http://controller:9292           |
++-----------+----------------------------------+
++-----------+----------------------------------+
+| keystone  | Value                            |
++-----------+----------------------------------+
+| id        | c78938f9f5c646a28722b16cecedaf62 |
+| interface | public                           |
+| region    | RegionOne                        |
+| region_id | RegionOne                        |
+| url       | http://controller:5000/v2.0      |
++-----------+----------------------------------+${CNC} 
+""" || echo "ERROR: nova endpoint list did not work"
+ echo " "
+
+ 
+  nova image-list && \
+ echo """>> This should have returned something like ${CGREEN}
++--------------------------------------+---------------------+--------+--------+
+| ID                                   | Name                | Status | Server |
++--------------------------------------+---------------------+--------+--------+
+| 2ba466ba-30e6-4e92-a11b-7c7527100af2 | cirros-0.3.4-x86_64 | ACTIVE |        |
++--------------------------------------+---------------------+--------+--------+${CNC} 
+""" || echo "ERROR: nova image-list did not work"
+ echo " "
+
+  
+  nova keypair-list && \
+ echo """>> This should have returned something like ${CGREEN}
++----------+-------------------------------------------------+
+| Name     | Fingerprint                                     |
++----------+-------------------------------------------------+
+| demo-key | d8:66:c7:81:c1:9a:50:f2:31:08:1b:1d:1d:3f:73:5e |
++----------+-------------------------------------------------+${CNC} 
+""" || echo "ERROR: nova keypair-list did not work"
+ echo " "
+
+  
+  nova net-list && \
+ echo """>> This should have returned something like ${CGREEN}
++--------------------------------------+----------+------+
+| ID                                   | Label    | CIDR |
++--------------------------------------+----------+------+
+| 5eaa4c63-1d6b-4e37-914b-2d2660176e82 | demo-net | None |
+| cf4e5bad-722d-4350-9819-42965364a740 | ext-net  | None |
++--------------------------------------+----------+------+${CNC} 
+""" || echo "ERROR: neutron net-list did not work"
+ echo " "
+
+ 
+ echo ">> Launching a nova instance with cirros" 
+ DEMO_NET_ID=$(neutron net-list |grep " demo-net " |awk '{print $2}')
+ EXT_NET_ID=$(neutron net-list |grep " ext-net " |awk '{print $2}')
+ IMG_NAME=$(nova image-list |grep cirros |awk '{print $4}')
+ 
+ nova boot --flavor m1.tiny --image $IMG_NAME --nic net-id=$DEMO_NET_ID \
+  --security-group default --key-name demo-key bomsi_os_test_instance
+
+ nova list && \
+ echo """>> This should have returned something like ${CGREEN}
++--------------------------------------+------------------------+--------+------------+-------------+----------------------+
+| ID                                   | Name                   | Status | Task State | Power State | Networks             |
++--------------------------------------+------------------------+--------+------------+-------------+----------------------+
+| f6611e61-ee39-49a8-8945-3e32c9ea52e8 | bomsi_os_test_instance | BUILD  | spawning   | NOSTATE     | demo-net=192.168.1.9 |
++--------------------------------------+------------------------+--------+------------+-------------+----------------------+${CNC} 
+""" || echo "ERROR: neutron agent-list did not work"
+ echo " "
+
+
+  echo ">> Waiting until the instance is running"
+  while nova list |grep bomsi_os_test_instance |grep NOSTATE &>/dev/null ;do sleep 1; done
+ 
+nova get-vnc-console bomsi_os_test_instance novnc && \
+ echo """>> This should have returned something like ${CGREEN}
++-------+--------------------------------------------------------------------------------+
+| Type  | Url                                                                            |
++-------+--------------------------------------------------------------------------------+
+| novnc | http://10.0.0.11:6080/vnc_auto.html?token=013ebf14-061a-4951-afb4-7bfff322dc1b |
++-------+--------------------------------------------------------------------------------+${CNC} 
+""" || echo "ERROR: neutron agent-list did not work"
+ echo " "
+  
+
+
+
+ echo " "
+ echo " "
+ echo " "
+
+ echo "### Neutron"
+
+
+  neutron agent-list && \
+ echo """>> This should have returned something like ${CGREEN}
+
++--------------------------------------+--------------------+----------+-------+----------------+---------------------------+
+| id                                   | agent_type         | host     | alive | admin_state_up | binary                    |
++--------------------------------------+--------------------+----------+-------+----------------+---------------------------+
+| 1835105e-c312-4cfc-8d6e-05d3b0748509 | L3 agent           | network  | :-)   | True           | neutron-l3-agent          |
+| 4dadb70c-6b29-419b-8eb8-7de917a8ecee | DHCP agent         | network  | :-)   | True           | neutron-dhcp-agent        |
+| 53b8fd89-b5df-45fc-8339-b70da21908bd | Open vSwitch agent | compute1 | :-)   | True           | neutron-openvswitch-agent |
+| 8246317d-9980-402a-9365-7e499764d25d | Metadata agent     | network  | :-)   | True           | neutron-metadata-agent    |
+| c07fa764-aba4-490c-a447-bdb29a2ede18 | Open vSwitch agent | network  | :-)   | True           | neutron-openvswitch-agent |
++--------------------------------------+--------------------+----------+-------+----------------+---------------------------+${CNC} 
+""" || echo "ERROR: neutron agent-list did not work"
+ echo " "
+
+
+ neutron net-list && \
+ echo """>> This should have returned something like ${CGREEN}
++--------------------------------------+----------+-----------------------------------------------------+
+| id                                   | name     | subnets                                             |
++--------------------------------------+----------+-----------------------------------------------------+
+| 5eaa4c63-1d6b-4e37-914b-2d2660176e82 | demo-net | f0160cb6-901e-426f-a2b8-90411e241736 192.168.1.0/24 |
+| cf4e5bad-722d-4350-9819-42965364a740 | ext-net  | 67e9d3c1-1663-4890-8bf1-8564eb983add 10.0.0.0/24    |
++--------------------------------------+----------+-----------------------------------------------------+
+${CNC} 
+""" || echo "ERROR: neutron net-list did not work"
+ echo " "
+
+
+  neutron subnet-list && \
+ echo """>> This should have returned something like ${CGREEN}
++--------------------------------------+-------------+----------------+--------------------------------------------------+
+| id                                   | name        | cidr           | allocation_pools                                 |
++--------------------------------------+-------------+----------------+--------------------------------------------------+
+| f0160cb6-901e-426f-a2b8-90411e241736 | demo-subnet | 192.168.1.0/24 | {"start": "192.168.1.2", "end": "192.168.1.254"} |
+| 67e9d3c1-1663-4890-8bf1-8564eb983add | ext-subnet  | 10.0.0.0/24    | {"start": "10.0.0.90", "end": "10.0.0.99"}       |
++--------------------------------------+-------------+----------------+--------------------------------------------------+${CNC}
+ """ || echo "ERROR: neutron subnet-list did not work"
+ echo " "
+
+
+  neutron router-list && \
+ echo """>> This should have returned something like ${CGREEN}
++--------------------------------------+-------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+-------+
+| id                                   | name        | external_gateway_info                                                                                                                                                                 | distributed | ha    |
++--------------------------------------+-------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+-------+
+| d8d24185-9caf-4540-bb66-02a804df29d6 | demo-router | {"network_id": "cf4e5bad-722d-4350-9819-42965364a740", "enable_snat": true, "external_fixed_ips": [{"subnet_id": "67e9d3c1-1663-4890-8bf1-8564eb983add", "ip_address": "10.0.0.90"}]} | False       | False |
++--------------------------------------+-------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+-------+${CNC}
+ """ || echo "ERROR: neutron router-list did not work"
+ echo " "
+
+
+
+  neutron port-list && \
+ echo """>> This should have returned something like (the 3rd one belongs to the instance we just launched) ${CGREEN}
++--------------------------------------+------+-------------------+------------------------------------------------------------------------------------+
+| id                                   | name | mac_address       | fixed_ips                                                                          |
++--------------------------------------+------+-------------------+------------------------------------------------------------------------------------+
+| 14380065-572a-4dd7-a367-219ba7ac08e1 |      | fa:16:3e:67:f2:68 | {"subnet_id": "f0160cb6-901e-426f-a2b8-90411e241736", "ip_address": "192.168.1.1"} |
+| 1bd431d3-4a94-4906-87e2-1a4477ab0c49 |      | fa:16:3e:ef:cf:c1 | {"subnet_id": "f0160cb6-901e-426f-a2b8-90411e241736", "ip_address": "192.168.1.2"} |
+| c53b21e1-923c-414f-8bcf-a38aff889355 |      | fa:16:3e:7d:b3:2c | {"subnet_id": "f0160cb6-901e-426f-a2b8-90411e241736", "ip_address": "192.168.1.9"} |
+| cbbf7632-1b72-4a15-9595-62ca7cfbe66d |      | fa:16:3e:c6:eb:d0 | {"subnet_id": "67e9d3c1-1663-4890-8bf1-8564eb983add", "ip_address": "10.0.0.90"}   |
++--------------------------------------+------+-------------------+------------------------------------------------------------------------------------+${CNC}
+ """ || echo "ERROR: neutron port-list did not work"
+ echo " "
+
+  
+  neutron ext-list && \
+ echo """>> This should have returned something like ${CGREEN}
++-----------------------+-----------------------------------------------+
+| alias                 | name                                          |
++-----------------------+-----------------------------------------------+
+| security-group        | security-group                                |
+| l3_agent_scheduler    | L3 Agent Scheduler                            |
+| net-mtu               | Network MTU                                   |
+| ext-gw-mode           | Neutron L3 Configurable external gateway mode |
+| binding               | Port Binding                                  |
+| provider              | Provider Network                              |
+| agent                 | agent                                         |
+| quotas                | Quota management support                      |
+| subnet_allocation     | Subnet Allocation                             |
+| dhcp_agent_scheduler  | DHCP Agent Scheduler                          |
+| l3-ha                 | HA Router extension                           |
+| multi-provider        | Multi Provider Network                        |
+| external-net          | Neutron external network                      |
+| router                | Neutron L3 Router                             |
+| allowed-address-pairs | Allowed Address Pairs                         |
+| extraroute            | Neutron Extra Route                           |
+| extra_dhcp_opt        | Neutron Extra DHCP opts                       |
+| dvr                   | Distributed Virtual Router                    |
++-----------------------+-----------------------------------------------+${CNC}
+ """ || echo "ERROR: neutron ext-list did not work"
+ echo " "
+ echo " "
+ echo " "
+ echo " "
+
+neutron router-list
+neutron router-port-list demo-router
+  
+   
+ echo ">> After launching an instance we can check the device name, as:"
+ INSTANCE_IP=$(nova list |grep bomsi_os_test_instance |awk  -F"|" '{print $7}' |awk -F= '{print $2}')
+ PORTID=$(neutron port-list | grep $INSTANCE_IP | cut -d \| -f 2)
+ echo "The device name associated to the instance is: " tap${PORTID:1:11}
+ echo "This should be the same as the result of the following command executed in the compute node:"
+ echo '  virsh dumpxml $(virsh list |grep running |awk "{print $2}"|tail -1) |grep tap |awk -F'"'"' "{print $2}" '
+
+ echo "Here it is:"
+ INSTANCE_NAME=$(sshpass -p "1234" ssh -o "StrictHostKeyChecking no" root@compute1 virsh list |grep running |awk '{print $2}'|tail -1)
+ sshpass -p "1234" ssh -o "StrictHostKeyChecking no" root@compute1 virsh dumpxml $INSTANCE_NAME|grep tap |awk -F\' '{print $2}'   
+ echo " "
+ echo " "
+
+}
+
+ 
+
+os_test_neutron_node () {
+
+   echo "### Neutron Node"
+
+   grep "net.ipv4.conf.default.rp_filter=0" /etc/sysctl.conf &> /dev/null && echo ">> Kernel modules OK" || echo "ERROR: kernel module(s) not loaded"
+
+   cmdt_sctl_err neutron-openvswitch-agent.service neutron-l3-agent.service  neutron-dhcp-agent.service neutron-metadata-agent.service 
+
+   echo "INFO:  neutron-ovs-cleanup should not be started explicitly. So if it is not running, it is OK"
+   cmdt_sctl_err neutron-ovs-cleanup.service
+
+
+  ovs-vsctl list-br && \
+ echo """>> This should have returned something like ${CGREEN}
+br-ex
+br-int
+br-tun${CNC}
+ """ || echo "ERROR: ovs-vsctl list-br did not work"
+ echo " "
+
+  ovs-vsctl list-ports br-ex && \
+   echo """>> This should have returned something like ${CGREEN}
+eth2
+phy-br-ex${CNC} """ || echo "ERROR: ovs-vsctl list-br did not work"
+ echo " "
+  
+  ovs-vsctl list-ports br-int && \
+   echo """>> This should have returned something like ${CGREEN}
+int-br-ex
+patch-tun
+qg-cbbf7632-1b
+qr-14380065-57
+tap1bd431d3-4a ${CNC}
+ """ || echo "ERROR: ovs-vsctl list-int did not work"
+ echo " "
+  
+  ovs-vsctl list-ports br-tun&& \
+   echo """>> This should have returned something like ${CGREEN}
+patch-int ${CNC}
+ """ || echo "ERROR: ovs-vsctl list-int did not work"
+ echo " "
+
+
+
+  ovs-vsctl show
+  ovs-ofctl show br-tun
+  ovs-ofctl dump-flows br-tun   
+
+
+   echo "Check that l3-agent created the networks properly"
+   QROUTER=$(ip netns | grep qrouter-)
+   QIFACE=$(ip netns exec $QROUTER ip addr list |grep qr |head -1 |awk '{print $2}'| awk -F: '{print $1}')
+
+   which tcpdump || yum -y install tcpdump
+   echo "Check if DHCP is running on the demo-net"
+   timeout 5 ip netns exec $QROUTER tcpdump -n -i $QIFACE     
+
+   echo "Ping Gateway of the ext-net"
+   ip netns exec $QROUTER ping -c3 $VIRT_NET_POOL_S
+
+}
+
+
+
+

@@ -1,0 +1,364 @@
+#! /bin/bash
+
+export BOMSI_LIB_VM_RELEASE="Liberty"
+export BOMSI_LIB_VM_VERSION="0.1"
+## 
+## This file contains functions for creating and manipulating (KVM) VMs
+## intended to host OpenStack installed via BOMSI 
+##
+##
+
+bomsi_vars_version () { 
+  echo "bomsi_lib_vm version: $BOMSI_LIB_VM_RELEASE $BOMSI_LIB_VM_VERSION" 
+}
+
+
+rm_vm () {
+#Delete the given VM and the data related to it
+vm_status=$(sudo virsh list |grep $1|awk '{print $3}')
+if [ "$vm_status" == "running" ]; then
+  sudo virsh destroy $1 && echo "VM " $1 " Down"
+fi
+vm_status=$(sudo virsh list --all |grep $1|awk '{print $3}')
+echo "$(sudo virsh list |grep $1)"
+if [ "$vm_status" == "shut" ]; then
+  sudo virsh undefine $1
+  sudo virsh vol-delete --pool default $1.img && echo "VM " $1 " succesfully removed"  
+fi
+}
+
+clone_vm () {
+ ## Usage: clone_vm ORIGINAL_VM_NAME  NEW_VM_NAME
+ ## Create only if VM does not exist in the hypervisor
+ sudo virsh --connect qemu:///system domstate $2 > /dev/null 2>&1 || \
+ sudo virt-clone --force --connect qemu:///system -o $1 -n $2  -f /var/lib/libvirt/images/$2.img
+    #virsh --connect qemu:///system start $2
+}
+
+
+
+
+
+#####
+#####  Start VMs with ISOs
+#####
+
+gen_vnet () {
+  ## Usage: gen_vnet NAME NET virbr"N" (i.e. virbr1: gen_vnet management 10.0.0.1 1)
+if [[ ! $(sudo virsh net-list |grep $1) ]]; then
+echo ">> Generating virtual network: " $1 " with gateway on " $2
+NEW_MAC=$(printf '00:60:2F:%02X:%02X:%02X' $[RANDOM%256] $[RANDOM%256] $[RANDOM%256])
+NEXT_FREE_VIRT_IFACE=$(brctl show |grep virbr |tail -1 |awk '{print $1}' |awk -Fvirbr '{print $2+1}') # The last +1 makes the increment
+#((NEXT_FREE_VIRT_IFACE++)) # increment the last found value in one
+cat > /tmp/xmlnetfile << EOF
+<network connections='2'>
+<name>$1</name>
+<forward mode='nat'>
+<nat>
+<port start='1024' end='65535'/>
+</nat>
+</forward>
+<bridge name='virbr$NEXT_FREE_VIRT_IFACE' stp='on' delay='0'/>
+<mac address='$NEW_MAC'/>
+<ip address='$2' netmask='255.255.255.0'>
+</ip>
+</network>
+EOF
+
+#virsh net-create /tmp/xmlnetfile #dissapears after reboot
+sudo virsh net-define /tmp/xmlnetfile
+sudo virsh net-start $1
+sudo virsh net-autostart $1 
+fi
+}
+
+
+start_iso_vm () {
+  echo " "
+  echo "------------------------"
+  echo ">> Starting VM with qemu" 
+  echo "------------------------"
+  #set -e
+  #set -x
+
+  ## If KVM is not installed, install it
+  which virsh > /dev/null || echo ">> Installing all the KVM packages" && sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst >> /tmp/installed_by_bomsi.log && sudo adduser $USER libvirtd && sudo adduser $USER kvm
+  which virt-manager  > /dev/null || echo ">> Installing all the virt-manager GUI" && sudo apt-get -y install virt-manager qemu-system && echo ">> The virt-manager GUI might not work properly until you reboot the system, but the VMs should work"
+
+
+  gen_vnet management ${IPPR_A}1
+  gen_vnet tunnel ${IPPR_T}1
+  gen_vnet storage ${IPPR_S}1
+
+  if [ -z ${VM_NAME+x} ]; then # If VM name was not set... 
+    TMPNAME="centos_OS-test"
+  else 
+    echo "The virtual machine (domain) will be called '$VM_NAME'"
+    TMPNAME=$VM_NAME
+  fi 
+
+  if [ -z $VIRT_NIC_MAN ]; then VIRT_NIC_MAN="network=management"; fi
+  
+  ## Make sure the user has permission to create VMs
+  sudo chmod 777 /var/lib/libvirt/images/  > /dev/null 
+ 
+  ## Delete an old VM with the same name
+  #virsh list --all |grep $TMPNAME |grep running > /dev/null && virsh destroy $TMPNAME 
+  #virsh list --all |grep $TMPNAME > /dev/null && virsh undefine $TMPNAME
+  #|| $TMPNAME does not exist yet
+  #echo "TMPNAME="$TMPNAME
+
+
+  vm_status=$(sudo virsh list |grep $TMPNAME|awk '{print $3}')
+  if [ "$vm_status" == "running" ]; then
+    sudo virsh destroy $TMPNAME && echo "VM " $TMPNAME " Down"
+  fi
+
+  vm_status=$(sudo virsh list --all |grep $TMPNAME|awk '{print $3}')
+  echo "$(sudo virsh list |grep $TMPNAME)"
+  if [ "$vm_status" == "shut" ]; then
+    echo ">> Remove $TMPNAME and delete the associated virtual disk(s)"
+    sudo virsh undefine $TMPNAME
+    sudo virsh vol-delete --pool default $TMPNAME.img && echo "VM " $TMPNAME " succesfully removed"
+    ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
+  fi
+
+  ls /var/lib/libvirt/images/$TMPNAME.img > /dev/null && sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img > /dev/null
+
+  echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
+  sudo qemu-img create -f raw /var/lib/libvirt/images/$TMPNAME.img ${DS}G 
+
+  echo "Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME
+"
+  ## Attach 1 extra virtual HD for block and 2 for object VMs, otherwise just root HD
+  
+  if [[ $TMPNAME == *"block"* ]]; then
+     echo "Creating a \"block\" VM"
+     sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --disk path=/var/lib/libvirt/images/$TMPNAME-HD.img,device=disk,bus=virtio,size=$DS_B --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
+  elif [[ $TMPNAME == *"object"* ]]; then
+     echo "Creating an \"object\" VM"
+     sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --disk path=/var/lib/libvirt/images/$TMPNAME-HD1.img,device=disk,bus=virtio,size=$DS_O --disk path=/var/lib/libvirt/images/$TMPNAME-HD2.img,device=disk,bus=virtio,size=$DS_O --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
+  else
+    echo "Using command:"
+    echo """ virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME""" 
+    sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --os-variant=rhel6 --disk /var/lib/libvirt/images/$TMPNAME.img,device=disk,bus=virtio,size=$DS,sparse=true,format=raw --network $VIRT_NIC_MAN,model=virtio --network network=tunnel,model=virtio --network network=storage,model=virtio --accelerate --vnc --noautoconsole -c $OUT_ISO_DIR/$OUT_ISO_NAME
+  fi
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+#####
+#####  Network Set Up
+#####
+
+
+
+
+
+basic_net_management (){
+
+  . /tmp/bomsi_{vars,lib_vm}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_vm
+  print_title "Setting basic management interface at on $1 $IFACE0 with IP=$2"
+
+  NAME_HOST=$1
+  NEWIP=$2
+  NETMASK=$3
+  GATEWAY=$4
+  echo $NAME_HOST $NEWIP $NETMASK $GATEWAY
+
+  mv /etc/sysconfig/network-scripts/ifcfg-$IFACE0 /etc/sysconfig/network-scripts/ifcfg-$IFACE0.bak
+
+  cat > /etc/sysconfig/network-scripts/ifcfg-$IFACE0 << EOF
+TYPE="Ethernet"
+NM_CONTROLLED="yes"
+BOOTPROTO="static"
+DEFROUTE="yes"
+IPV6INIT="yes"
+IPV6_AUTOCONF="yes"
+IPV6_DEFROUTE="yes"
+IPV6_PEERDNS="yes"
+IPV6_PEERROUTES="yes"
+IPV6_FAILURE_FATAL="no"
+NAME="$IFACE0"
+DEVICE=$IFACE0
+ONBOOT="yes"
+IPADDR=$NEWIP
+NETMASK=$NETMASK
+DNS1=$NAMESERVER
+DNS2=136.172.17.3
+GATEWAY=$GATEWAY
+EOF
+
+  cat > /etc/sysconfig/network << EOF
+NETWORKING=yes
+HOSTNAME=$NAME_HOST
+GATEWAY=$GATEWAY
+EOF
+
+  cat > /etc/hostname << EOF
+$NAME_HOST
+EOF
+
+mv /etc/hosts /etc/hosts.BK
+  cat > /etc/hosts << EOF
+#127.0.0.1 localhost 
+$CONTROLLER_IP controller 
+$KEYSTONE_IP keystone 
+$GLANCE_IP glance 
+$NOVA_IP nova 
+$NEUTRON_NODE_IP network
+$COMPUTE_IPS compute1
+$BLOCK_IPS block1
+$SWIFT_N_IP object1
+EOF
+
+  cat > /etc/resolv.conf << EOF
+nameserver $NAMESERVER
+EOF
+
+  #Set timezone
+  mv /etc/localtime /etc/localtime.bak
+  ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+
+  #shutdown -r now
+  #/etc/init.d/network restart
+  #service network restart & exit
+
+ # echo "ip addr add $NEWIP/24 dev $IFACE0"
+ # ip addr flush dev $IFACE0 &
+ # ip addr add $NEWIP/24 dev $IFACE0
+  reboot
+  print_title "Management net configured"
+  
+}
+
+
+
+
+
+basic_net_tunnel (){
+ # Usage: basic_net_tunnel 10.0.1.31 $IFACE2
+ print_title "basic_net_tunnel"
+  . /tmp/bomsi_{vars,lib_vm}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_vm
+
+  echo $1 $2 $NETMASK
+
+#GATEWAY=$(echo $1 |awk -F. '{print $1"."$2"."$3".1" }' )
+
+  cat > /etc/sysconfig/network-scripts/ifcfg-$2 << EOF
+BOOTPROTO="static"
+DEFROUTE="no"
+IPV6INIT="yes"
+NAME="$2"
+DEVICE=$2
+ONBOOT="yes"
+IPADDR=$1
+NETMASK=$NETMASK
+NM_CONTROLLED="no"
+EOF
+
+## If the device name looks like a VLAN
+if [[ $1 == *"."* ]] || [[ $1 == *":"* ]]; then
+  modprobe 8021q
+  echo "VLAN=yes" >> /etc/sysconfig/network-scripts/ifcfg-$2
+else
+  echo "TYPE='Ethernet'" >> /etc/sysconfig/network-scripts/ifcfg-$2
+fi
+
+## Disable the NetworkManager service and use the regular "network" instead
+#chkconfig NetworkManager off
+#systemctl stop NetworkManager
+#pkill -9 NetworkManager
+#chkconfig network on
+#service network start
+
+ifup $2
+}
+
+
+basic_net_storage (){
+ # Usage: basic_net_tunnel 10.0.2.31 $IFACE_EXT
+  . /tmp/bomsi_{vars,lib_vm}
+  #. /tmp/bomsi_vars
+  #. /tmp/bomsi_lib_vm
+ #GATEWAY=$(echo $1 |awk -F. '{print $1"."$2"."$3".1" }' )
+
+  cat > /etc/sysconfig/network-scripts/ifcfg-$2 << EOF
+BOOTPROTO="static"
+DEFROUTE="yes"
+IPV6INIT="yes"
+IPV6_AUTOCONF="yes"
+IPV6_DEFROUTE="yes"
+IPV6_PEERDNS="yes"
+IPV6_PEERROUTES="yes"
+IPV6_FAILURE_FATAL="no"
+NAME="$2"
+DEVICE=$2
+ONBOOT="yes"
+IPADDR=$1
+NETMASK=$NETMASK
+GATEWAY=$GATEWAY1
+EOF
+
+## If the device name looks like a VLAN
+if [[ $1 == *"."* ]] || [[ $1 == *":"* ]]; then
+  modprobe 8021q
+  echo "VLAN=yes" >> /etc/sysconfig/network-scripts/ifcfg-$2
+else
+  echo "TYPE='Ethernet'" >> /etc/sysconfig/network-scripts/ifcfg-$2
+fi
+
+ifup $2
+#ifconfig $2
+}
+
+
+basic_net_ext (){
+ # Usage: basic_net_ext eth2
+
+## Disable the NetworkManager service and use the regular "network" instead
+#chkconfig NetworkManager off
+#systemctl stop NetworkManager
+#pkill -9 NetworkManager
+#chkconfig network on
+#service network start
+
+  cat > /etc/sysconfig/network-scripts/ifcfg-$1 << EOF
+DEVICE=$1
+TYPE=Ethernet
+ONBOOT="yes"
+BOOTPROTO="none"
+PROMISC=yes
+EOF
+
+echo "ifconfig $IFACE1 promisc" >> /etc/rc.local
+ifconfig $1 promisc
+ifup $1
+ip link set dev $1 promisc on
+
+#ifconfig $IFACE0
+}
+
+
+
+
+
+
+
+
+
+
