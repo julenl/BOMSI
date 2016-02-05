@@ -1,0 +1,90 @@
+#! /bin/bash
+
+install_nova_controller () {
+
+ . /root/bomsi/lib/bomsi_vars
+ . /root/bomsi/lib/create_sql_user
+ . ~/admin-openrc.sh
+
+  create_sql_user nova $NOVA_DB_PASSWORD
+
+  ## Create the user and endpoint for nova
+  openstack user create --domain default --password $NOVA_PASSWORD --email nova@os.mydomain.com nova
+  #openstack user create --project service --password $NOVA_PASSWORD --email nova@os.mydomain.com nova
+  openstack role add --project service --user nova admin
+
+ openstack service create --name nova \
+  --description "OpenStack Compute" compute
+
+  openstack endpoint create --region RegionOne \
+    compute public http://controller:8774/v2/%\(tenant_id\)s
+  openstack endpoint create --region RegionOne \
+    compute internal http://controller:8774/v2/%\(tenant_id\)s
+  openstack endpoint create --region RegionOne \
+    compute admin http://controller:8774/v2/%\(tenant_id\)s
+
+  
+ #openstack endpoint create \
+ # --publicurl http://controller:8774/v2/%\(tenant_id\)s \
+ # --internalurl http://controller:8774/v2/%\(tenant_id\)s \
+ # --adminurl http://controller:8774/v2/%\(tenant_id\)s \
+ # --region RegionOne \
+ # compute
+
+
+
+  # Install packages
+  apt-get -y install nova-api nova-cert nova-conductor nova-consoleauth nova-novncproxy nova-scheduler python-novaclient
+
+  ## Edit the configuration file of nova in the controller
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF database "connection = mysql+pymysql://nova:${NOVA_DB_PASSWORD}@controller/nova"
+
+  susti $TMPF DEFAULT "rpc_backend = rabbit"
+  susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+  susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+  susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = nova"
+  susti $TMPF keystone_authtoken "password = $NOVA_PASSWORD"
+
+
+  MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+
+  susti $TMPF DEFAULT "my_ip = $MY_MGM_IP"
+
+  susti $TMPF DEFAULT "network_api_class = nova.network.neutronv2.api.API"
+  susti $TMPF DEFAULT "security_group_api = neutron"
+  susti $TMPF DEFAULT "linuxnet_interface_driver = nova.network.linux_net.NeutronLinuxBridgeInterfaceDriver"
+  susti $TMPF DEFAULT "firewall_driver = nova.virt.firewall.NoopFirewallDriver"
+  susti $TMPF vnc "vncserver_listen = \$my_ip" 
+  susti $TMPF vnc "vncserver_proxyclient_address = \$my_ip" 
+  susti $TMPF glance "host = controller"
+  susti $TMPF oslo_concurrency "lock_path = /var/lib/nova/tmp" 
+  susti $TMPF DEFAULT "enabled_apis=osapi_compute,metadata"
+  susti $TMPF DEFAULT "verbose = True"
+
+  # Populate the nova database
+  su -s /bin/sh -c "nova-manage db sync" nova
+
+  # Restart compute services
+  service nova-api restart
+  service nova-cert restart
+  service nova-consoleauth restart
+  service nova-scheduler restart
+  service nova-conductor restart
+  service nova-novncproxy restart
+
+  # Delete the default SQLite database
+  rm -f /var/lib/nova/nova.sqlite
+
+}
+
+
+

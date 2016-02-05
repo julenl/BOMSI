@@ -1,0 +1,60 @@
+#! /bin/bash
+
+mysqld_rabbitmq (){
+ . /root/bomsi/lib/bomsi_vars
+
+  # Install mariadb with preseeded password
+  echo mysql-server mysql-server/root_password select $MYSQL_ROOT | debconf-set-selections
+  echo mysql-server mysql-server/root_password_again select $MYSQL_ROOT | debconf-set-selections
+
+  apt-get -y install mariadb-server python-pymysql
+
+  which mysql || exit
+
+cat > /etc/mysql/conf.d/mysqld_openstack.cnf <<EOF
+[mysqld]
+bind-address = $CONTROLLER_IP
+
+[mysqld]
+default-storage-engine = innodb
+innodb_file_per_table
+collation-server = utf8_general_ci
+init-connect = 'SET NAMES utf8'
+character-set-server = utf8
+EOF
+
+sed -i 's/^bind-address.*/bind-address           = 0.0.0.0/' /etc/mysql/mariadb.conf.d/mysqld.cnf
+
+  service mysql restart
+
+ #viewing and deleting mysql users
+ # SELECT User,Host FROM mysql.user;
+ # DROP USER 'keystone'@'localhost';
+ # DROP USER 'keystone'@'%';
+
+
+  # Automated MySQL secure instalation
+  mysql -u root -p$MYSQL_ROOT<<-EOF
+UPDATE mysql.user SET Password=PASSWORD('$MYSQL_ROOT') WHERE User='root';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%';
+FLUSH PRIVILEGES;
+EOF
+
+
+  apt-get -y install rabbitmq-server
+
+  rabbitmqctl add_user openstack $RABBIT_PASS
+  rabbitmqctl set_permissions openstack ".*" ".*" ".*" 
+
+  # check:
+  #   rabbitmqctl status
+  #   rabbitmqctl cluster_status
+  #   rabbitmqctl list_connections
+  #   rabbitmqctl list_queues |grep -v "0$"
+  #   grep -i alarm /var/log/rabbitmq/* 
+
+}
+
+

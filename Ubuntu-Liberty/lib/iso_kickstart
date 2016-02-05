@@ -1,0 +1,151 @@
+#! /bin/bash
+
+ksf_menu_add () {
+  ## Add entries to boot menu file
+  ## Usage: ksf_menu_add LABEL TITLE KS_FILE
+  
+  TMPF="$OUT_DIR/files/isolinux/txt.cfg"
+  sed -i '/default .*/d' $TMPF
+  TMP_TMPF=$(cat $TMPF) # This contains the old config
+  rm $TMPF
+  cat > $TMPF <<EOF
+label $1
+  menu label $2
+  kernel /install/vmlinuz
+  append  file=/cdrom/preseed/ubuntu-server.seed vga=788 initrd=/install/initrd.gz ks=cdrom:/ks/ks-${1}.cfg ---
+EOF
+  echo "$TMP_TMPF" >> $TMPF
+}
+
+
+
+
+
+iso_kickstart () {
+
+
+  # Umount previously mounted ISO and files
+  df -h |grep /dev/loop0 > /dev/null && sudo umount /dev/loop0
+  df -h |grep /dev/loop1 > /dev/null && sudo umount /dev/loop1
+  df -h |grep /dev/loop2 > /dev/null && sudo umount /dev/loop2
+  sudo rm -rf $OUT_DIR/
+
+
+
+  ## Mount the original ISO and copy the files so that we can edit them
+  mkdir -p /tmp/mountiso/
+  echo '>> Root password is required for mounting the iso image.'
+  sudo mount -o loop $PATH_TO_ISO /tmp/mountiso/ &> /dev/null
+
+  ## Generate the directories for the custom scripts
+  mkdir -p $OUT_DIR/files/{ks,bomsi}
+  sudo chown -R $USER $OUT_DIR/
+   
+  #rm -rf $OUT_DIR/ && rm -rf ~/Ubuntu_custom.iso
+
+
+  echo ">> Copying the contents of the iso file in /tmp/mountiso/ into $OUT_DIR/custom_iso/files/"
+  rsync -a /tmp/mountiso/ $OUT_DIR/files/
+
+  chmod -R u+w /tmp/custom_iso
+  echo en > $OUT_DIR/files/isolinux/lang
+
+
+  ## Copy this directory to the /root/bomsi directory in the new server
+  cp -r * $OUT_DIR/files/bomsi
+
+
+
+  KS_MENU_ARR=(controller compute1 compute2 compute3) # network block object)
+  KS_INDEX=1
+  ## Add options to kickstart menu
+  ## Read the node list in reverse order, so that controller is the first opt
+  for ((i=${#KS_MENU_ARR[@]}-1; i>=0; i--)); do
+    #echo "${KS_MENU_ARR[$i]}"
+    OPT_MENU="${KS_MENU_ARR[$i]}"
+    ksf_menu_add $OPT_MENU "^$KS_INDEX Kickstart $OPT_MENU"
+    KS_INDEX=$((KS_INDEX+1)) 
+  done
+
+
+  #for OPT_MENU in $KS_MENU_LIST
+  #  do
+  #    ksf_menu_add $OPT_MENU "Kickstart $OPT_MENU"  
+  #  done
+
+  ## Try to set boot menu to auto select the right option
+  for OPT_MENU in "${KS_MENU_ARR[@]}"
+    do
+      if [[ $VM_NAME == *"$OPT_MENU"* ]]; then
+        echo ">> The '$OPT_MENU' node will be set as default on the installer menu" 
+        DEF_KICKSTART=${OPT_MENU}
+        KS_SET="YES"
+      fi
+    done
+
+  ## If the VM name does not include a "node name" install a clean machine
+  [ -z ${DEF_KICKSTART+x} ] && DEF_KICKSTART="controller"
+
+  ## Set the default boot option
+  TMPF="$OUT_DIR/files/isolinux/txt.cfg"
+  TMP_TMPF=$(cat $TMPF)
+  rm $TMPF
+  echo "default compute2" >> $TMPF
+  #echo "default $DEF_KICKSTART" >> $TMPF
+  echo "$TMP_TMPF" >> $TMPF
+
+
+  ## Set a faster timeout for the boot menu (time x10 in seconds)
+  sed -i "s/timeout .*/timeout 300/" $OUT_DIR/files/isolinux/isolinux.cfg 
+
+
+
+
+  ## Generate kickstart files for each node from template
+  which envsubst > /dev/null || exit   
+  
+  for HOST in "${KS_MENU_ARR[@]}"
+   do 
+     ## Set content of post-install
+     echo ">>Generating kickstart file at " $OUT_DIR/files/ks/ks-${HOST}.cfg
+     export IP=$(eval 'echo $IP_'${HOST}) #IP for current server
+     echo " > machine: ${HOST} => IP= ${IP}"
+
+     if [ "$IP" ]; then # If the IP is not empty
+       export POST_SCRIPT="""
+        log_step 'Running the setup_$HOST script'
+       setup_$HOST 
+       """
+     else  # If the IP was not defined, install a basic system
+       export IP=$IPPR_A"254"
+       export POST_SCRIPT="log_step 'BOMSI will not be installed.'"
+     fi
+
+
+     export HOST_NAME=${HOST}
+     envsubst < ./ks_file_template > $OUT_DIR/files/ks/ks-${HOST}.cfg
+
+  done
+
+
+
+cat > $OUT_DIR/files/bomsi/hosts << EOF
+$IP_controller controller
+$IP_compute1 compute1  
+$IP_compute2 compute2  
+$IP_compute3 compute3  
+${IPPR_A}$NEUTRON_LN network   
+${IPPR_A}$CINDER_LN block     
+EOF
+
+
+  mkisofs -D -r -V "BOMSI_INSTALLER" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ~/$OUT_ISO_NAME $OUT_DIR/files/ 
+
+  which dumpet && dumpet -i ~/$OUT_ISO_NAME
+
+
+}
+
+
+
+

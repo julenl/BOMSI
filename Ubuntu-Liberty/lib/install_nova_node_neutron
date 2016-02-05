@@ -1,0 +1,60 @@
+#! /bin/bash
+
+install_nova_node_neutron () {
+
+ . /root/bomsi/lib/bomsi_vars
+ . /root/bomsi/lib/install_nova_node_neutron_provide
+ . /root/bomsi/lib/install_nova_node_neutron_self-serv
+   print_title "install_neutron_node"
+
+  # Install packages
+  apt-get -y install neutron-plugin-linuxbridge-agent conntrack
+
+  
+   ## This part here is exactly the same as in the controller
+  TMPF="/etc/neutron/neutron.conf"
+
+  susti $TMPF DEFAULT "rpc_backend = rabbit"
+  susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+  susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+  susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "auth_plugin = password"
+  susti $TMPF keystone_authtoken "project_domain_id = default"
+  susti $TMPF keystone_authtoken "user_domain_id = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = neutron"
+  susti $TMPF keystone_authtoken "password = $NEUTRON_PASSWORD"
+  susti $TMPF DEFAULT "core_plugin = ml2"
+  susti $TMPF DEFAULT "service_plugins = router"
+  susti $TMPF DEFAULT "allow_overlapping_ips = True"
+  susti $TMPF DEFAULT "verbose = True"
+
+
+  #install_nova_node_neutron_provider
+  install_nova_node_neutron_self-serv
+
+
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF neutron "neutronurl = http://controller:9696"
+  susti $TMPF neutron "neutronauth_url = http://controller:35357"
+  susti $TMPF neutron "neutronauth_plugin = password"
+  susti $TMPF neutron "neutronproject_domain_id = default"
+  susti $TMPF neutron "neutronuser_domain_id = default"
+  susti $TMPF neutron "neutronregion_name = RegionOne"
+  susti $TMPF neutron "neutronproject_name = service"
+  susti $TMPF neutron "neutronusername = neutron"
+  susti $TMPF neutron "neutronpassword = ${NEUTRON_PASSWORD}"
+
+  service nova-compute restart
+  service neutron-plugin-linuxbridge-agent restart
+
+  # Run this again, otherwise it doesn't work for some reason
+  service nova-compute restart
+}
+
+
+

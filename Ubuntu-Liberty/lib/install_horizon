@@ -1,0 +1,20 @@
+#! /bin/bash
+
+install_horizon () {
+
+ #. /root/bomsi/lib/bomsi_vars
+
+  apt-get -y install openstack-dashboard
+
+  TMPF="/etc/openstack-dashboard/local_settings.py"
+  sed -i "s/.*OPENSTACK_HOST =.*/OPENSTACK_HOST = \"controller\"/" $TMPF
+  sed -i "s/.*ALLOWED_HOSTS =.*/ALLOWED_HOSTS = ['*', ]/" $TMPF
+
+  sed -i "s/OPENSTACK_KEYSTONE_DEFAULT_ROLE =.*/OPENSTACK_KEYSTONE_DEFAULT_ROLE = \"user\"/" $TMPF
+  
+  # Restart apache
+  service apache2 reload
+
+}
+
+

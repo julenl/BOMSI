@@ -1,0 +1,188 @@
+#! /bin/bash
+
+install_keystone (){
+
+ . /root/bomsi/lib/bomsi_vars
+ . /root/bomsi/lib/create_sql_user
+
+  ## Create the MySQL/MariaDB user for keystone
+  log_step ".   > Generating database for user keystone"
+  create_sql_user keystone $KEYSTONE_DB_PASSWORD
+ 
+  ## Generate an admin token and copy it into the variables file and to the home directory (just in case)
+  if [ ! $ADMIN_TOKEN ]; then
+    export ADMIN_TOKEN=$(openssl rand -hex 10 |tee token_admin)
+    echo "export ADMIN_TOKEN=\"$ADMIN_TOKEN\" " >> /tmp/bomsi_vars 
+  fi
+
+  #Prevent keystone from starting automatically
+  echo "manual" > /etc/init/keystone.override
+
+  log_step ".   > Installing packages"
+  apt-get -y install keystone apache2 libapache2-mod-wsgi memcached python-memcache
+
+  ## Edit the config file of keystone
+  TMPF="/etc/keystone/keystone.conf"
+  susti $TMPF DEFAULT   "admin_token =   ${ADMIN_TOKEN}"
+  susti $TMPF database  "connection=mysql+pymysql://keystone:${KEYSTONE_DB_PASSWORD}@controller/keystone"
+  susti $TMPF memcache   "servers = localhost:11211"
+  susti $TMPF token     "provider=uuid"
+  susti $TMPF token     "driver=memcache"
+  susti $TMPF revoke   "driver = sql"
+  susti $TMPF DEFAULT   "verbose=True"
+  
+  # Populate the database
+  log_step ".   > Populate the keystone database"
+  su -s /bin/sh -c "keystone-manage db_sync" keystone
+
+  # Check if the database and tables were generated properly
+  echo ">> Check tables in database keystone (it should give some 34 entries):"
+  mysql -u keystone -h controller -p${KEYSTONE_DB_PASSWORD} -e "show tables in keystone;"
+
+  # Configure apache
+
+  log_step ".   > Configuring apache with wsgi"
+  #sed -i 's/.*ServerName www.example.com:80/ServerName controller/' /etc/apache2/apache2.conf 
+  echo "ServerName controller" >> /etc/apache2/apache2.conf
+
+cat > /etc/apache2/sites-available/wsgi-keystone.conf <<EOF
+Listen 5000
+Listen 35357
+
+<VirtualHost *:5000>
+    WSGIDaemonProcess keystone-public processes=5 threads=1 user=keystone group=keystone display-name=%{GROUP}
+    WSGIProcessGroup keystone-public
+    WSGIScriptAlias / /usr/bin/keystone-wsgi-public
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIPassAuthorization On
+    <IfVersion >= 2.4>
+      ErrorLogFormat "%{cu}t %M"
+    </IfVersion>
+    ErrorLog /var/log/apache2/keystone.log
+    CustomLog /var/log/apache2/keystone_access.log combined
+
+    <Directory /usr/bin>
+        <IfVersion >= 2.4>
+            Require all granted
+        </IfVersion>
+        <IfVersion < 2.4>
+            Order allow,deny
+            Allow from all
+        </IfVersion>
+    </Directory>
+</VirtualHost>
+
+<VirtualHost *:35357>
+    WSGIDaemonProcess keystone-admin processes=5 threads=1 user=keystone group=keystone display-name=%{GROUP}
+    WSGIProcessGroup keystone-admin
+    WSGIScriptAlias / /usr/bin/keystone-wsgi-admin
+    WSGIApplicationGroup %{GLOBAL}
+    WSGIPassAuthorization On
+    <IfVersion >= 2.4>
+      ErrorLogFormat "%{cu}t %M"
+    </IfVersion>
+    ErrorLog /var/log/apache2/keystone.log
+    CustomLog /var/log/apache2/keystone_access.log combined
+
+    <Directory /usr/bin>
+        <IfVersion >= 2.4>
+            Require all granted
+        </IfVersion>
+        <IfVersion < 2.4>
+            Order allow,deny
+            Allow from all
+        </IfVersion>
+    </Directory>
+</VirtualHost>
+EOF
+
+  # Enable the identity services virtual hosts
+  ln -s /etc/apache2/sites-available/wsgi-keystone.conf /etc/apache2/sites-enabled
+
+  # Restart apache to use the new configuration
+  log_step ".   > Restarting apache"
+  service keystone stop && echo " ## keystone was running for some reason"
+  service apache2 restart
+
+  # We don't need the SQLite database created by default
+  rm -f /var/lib/keystone/keystone.db
+
+
+  #Cron to purge expired tokens hourly
+  (crontab -l -u keystone 2>&1 | grep -q token_flush) || \
+    echo '@hourly /usr/bin/keystone-manage token_flush >/var/log/keystone/keystone-tokenflush.log 2>&1' \
+    >> /var/spool/cron/keystone
+
+
+ ## Create the service and endpoint for keystone as well as the default project, users (admin,demo) and roles
+  log_step ".   > Generate keystone credentials"
+  export OS_TOKEN=$ADMIN_TOKEN
+  export OS_URL=http://controller:35357/v3
+  export OS_IDENTITY_API_VERSION=3
+
+
+  openstack service create \
+   --name keystone --description "OpenStack Identity" identity
+
+  openstack endpoint create --region RegionOne \
+    identity public http://controller:5000/v2.0
+  openstack endpoint create --region RegionOne \
+    identity internal http://controller:5000/v2.0
+  openstack endpoint create --region RegionOne \
+    identity admin http://controller:35357/v2.0
+
+
+  openstack project create --domain default \
+   --description "Admin Project" admin
+
+  openstack user create --domain default \
+   --password $KEYSTONE_ADMIN_PASSWORD admin --email admin@os.mydomain.com
+
+  openstack role create admin
+  openstack role add --project admin --user admin admin
+
+  openstack project create --domain default \
+   --description "Service Project" service
+
+  openstack project create --domain default \
+   --description "Demo Project" demo
+  openstack user create --domain default \
+   --password $KEYSTONE_DEMO_PASSWORD demo --email demo@os.mydomain.com
+
+  openstack role create user
+  openstack role add --project demo --user demo user
+
+
+  log_step ".   > Generate admin/demo credential files"
+  # Create the Keystone credentials file in the home directory
+cat > /root/admin-openrc.sh << EOF
+export OS_PROJECT_DOMAIN_ID=default
+export OS_USER_DOMAIN_ID=default
+export OS_PROJECT_NAME=admin
+export OS_TENANT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=$KEYSTONE_ADMIN_PASSWORD
+export OS_AUTH_URL=http://controller:35357/v3
+export OS_IDENTITY_API_VERSION=3
+export OS_REGION_NAME=RegionOne
+export OS_IMAGE_API_VERSION=2
+EOF
+
+cat > ~/demo-openrc.sh << EOF
+export OS_PROJECT_DOMAIN_ID=default
+export OS_USER_DOMAIN_ID=default
+export OS_PROJECT_NAME=demo
+export OS_TENANT_NAME=demo
+export OS_USERNAME=demo
+export OS_PASSWORD=$KEYSTONE_DEMO_PASSWORD
+export OS_AUTH_URL=http://controller:35357/v3
+export OS_IDENTITY_API_VERSION=3
+export OS_REGION_NAME=RegionOne
+export OS_IMAGE_API_VERSION=2
+EOF
+
+}
+
+
+
+

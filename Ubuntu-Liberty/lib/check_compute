@@ -1,0 +1,22 @@
+#! /bin/bash
+
+check_compute () {
+  . ~/admin-openrc.sh
+  
+ echo "### This should show 4 services in the controller and 1 in the compute, all up"
+ nova service-list
+
+ echo "### This should show 9 boxes"
+ nova endpoints
+
+ echo "### This should show the cirros image"
+ nova image-list
+
+
+ ssh-keygen -f ~/.ssh/id_rsa -t rsa -N ''
+ nova keypair-add --pub-key ~/.ssh/id_rsa.pub demo-key
+ nova keypair-list
+
+}
+
+

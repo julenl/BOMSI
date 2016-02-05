@@ -1,0 +1,77 @@
+#! /bin/bash
+
+create_neutron_networks () {
+
+ . /root/bomsi/lib/bomsi_vars
+ . ~/admin-openrc.sh
+
+  #echo "### This should show 5 entries"
+  #neutron agent-list
+
+  neutron net-create public --shared --provider:physical_network public \
+  --provider:network_type flat
+
+
+ export PUBLIC_NETWORK_CIDR=$IPPR_A'0/24' #Network
+ export START_IP_ADDRESS=$IPPR_A'80'  #1st IP in range
+ export END_IP_ADDRESS=$IPPR_A'90'  #last IP
+ export DNS_RESOLVER="8.8.4.4"
+ export PUBLIC_NETWORK_GATEWAY=$GATEWAY  #Gateway
+
+
+  neutron subnet-create public $PUBLIC_NETWORK_CIDR --name public \
+    --allocation-pool start=$START_IP_ADDRESS,end=$END_IP_ADDRESS\
+    --dns-nameserver $DNS_RESOLVER --gateway $PUBLIC_NETWORK_GATEWAY
+
+
+  neutron net-create private
+
+  export PRIVATE_NETWORK_CIDR="192.168.1.0/24"
+  export DNS_RESOLVER="8.8.4.4"
+  export PRIVATE_NETWORK_GATEWAY=192.168.1.1
+
+  neutron subnet-create private $PRIVATE_NETWORK_CIDR --name private \
+  --dns-nameserver $DNS_RESOLVER --gateway $PRIVATE_NETWORK_GATEWAY
+
+
+  neutron net-update public --router:external
+
+  . ~/demo-openrc.sh
+  neutron router-create router
+  . ~/admin-openrc.sh
+  neutron router-interface-add router private
+  neutron router-gateway-set router public
+
+ #Delete those networks and routers
+# neutron router-gateway-clear router && neutron router-interface-delete router private && neutron router-delete router && neutron net-delete private && neutron net-delete public
+
+
+ #ifconfig $IFACE0 promisc
+
+ #print_title "Testing Neutron Networkin"
+
+ echo "Check that l3-agent created the networks properly"
+ QROUTER=$(ip netns | grep qrouter- |awk '{print $1}')
+ ip netns exec $QROUTER ip addr list
+ echo "Ping Gateway of the external network"
+ ip netns exec $QROUTER ping -c3 $START_IP_ADDRESS
+
+ neutron port-list
+ #neutron port-show #ID
+
+ #To delete them
+ #dhcp_delete_namespaces
+ #dhcp_delete_namespaces
+
+
+ # Security groups
+ nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
+ nova secgroup-add-rule default tcp 22 22 0.0.0.0/0
+
+ # To launch an instance
+ #NET_ID=$(neutron net-list |grep private |awk '{print $2}')
+ #nova boot --flavor m1.tiny --image cirros --nic net-id=$NET_ID --security-group default --key-name demo-key private-instance
+
+}
+
+

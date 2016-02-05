@@ -1,0 +1,229 @@
+preseed preseed/file=/cdrom/preseed/ubuntu-server-minimalvm.seed
+preseed preseed/file=/cdrom/preseed/lubuntu.seed
+
+# System language
+lang en_US
+
+# Language modules to install
+langsupport en_US
+
+# System keyboard
+keyboard us
+
+# System mouse
+mouse
+
+# System timezone
+timezone Europe/Berlin --isUtc
+
+# Root password
+rootpw --disabled
+
+# Initial user (will have sudo so no need for root)
+user user --fullname "Ubuntu User" --password AC0mP13xP4s5word
+
+# Reboot after installation
+reboot
+
+# Use text mode install
+text
+
+# Install OS instead of upgrade
+install
+
+# Installation media
+cdrom
+
+# Clear the Master Boot Record
+zerombr yes
+
+# Partition clearing information
+clearpart --all --initlabel #--drives=$HD
+
+# System bootloader configuration
+bootloader --location=mbr
+#bootloader --append=" crashkernel=auto" --location=mbr --boot-drive=$HD
+#autopart --type=lvm
+
+
+#new attempt
+
+#System bootloader configuration
+bootloader --location=mbr 
+
+#Clear the Master Boot Record
+zerombr yes
+
+#Partition clearing information
+clearpart --all --initlabel 
+
+#Basic disk partition
+part / --fstype ext4 --size 1 --grow --asprimary 
+part swap --size 1024 
+part /boot --fstype ext4 --size 256 --asprimary 
+
+
+
+
+## Advanced partition
+## The last lv specified will take up the remaining space of the vg. To get
+## around that add up all your disk sizes and set this value. It appears to
+## factor in the size of non lvm partitions as well.
+#preseed partman-auto-lvm/guided_size string 8GB
+#part /boot --fstype=ext4 --size=512 --asprimary
+#part pv.1 --grow --size=1 --asprimary
+#volgroup vg0 --pesize=4096 pv.1
+#logvol / --fstype=ext4 --name=root --vgname=vg0 --size=1024
+#logvol /usr --fstype=ext4 --name=usr --vgname=vg0 --size=2048
+#logvol /var --fstype=ext4 --name=var --vgname=vg0 --size=1536
+#logvol swap --name=swap --vgname=vg0 --size=2048 --maxsize=2048
+#logvol /home --fstype=ext4 --name=home --vgname=vg0 --size=512
+
+
+
+
+
+
+
+
+# Don't install recommended items by default
+preseed base-installer/install-recommends boolean true
+
+# System authorization infomation
+# The enablemd5 has to be there although it will still use salted sha256
+auth  --useshadow  --enablemd5
+
+# Network information
+#network --bootproto=dhcp --device=eth0
+network --bootproto=static --device=$IFACE0  --ip=$IP --netmask=$NETMASK --gateway=$GATEWAY --nameserver=$NAMESERVER --activate --hostname=$HOST_NAME
+
+
+# Firewall configuration
+firewall --disabled --trust=eth0 --ssh
+
+
+preseed pkgsel/update-policy select unattended-upgrades
+
+# No X window system 
+skipx
+
+# Reboot after installation
+#reboot
+
+%packages
+
+# Since I don't install recommended it leaves out some things that should
+# probably be installed like openssl and python 2.7
+openssl
+python
+wget
+tcpd
+# End all the recommended packages that are still useful
+openssh-server
+curl
+screen
+vim
+
+
+%post
+
+# Change default umask from 022 to 027 (not world readable). Remove this line
+# if you don't want that
+sed -i -e 's/^\(UMASK\W*\)[0-9]\+$/\1027/' /etc/login.defs
+
+# Add noatime to /etc/fstab
+sed -i -e 's/\(errors=remount-ro\)/noatime,\1/' /etc/fstab
+sed -i -e 's/\(boot.*defaults\)/\1,noatime,nodev/' /etc/fstab
+sed -i -e 's/\(home.*defaults\)/\1,noatime,nodev/' /etc/fstab
+sed -i -e 's/\(usr.*defaults\)/\1,noatime,nodev/' /etc/fstab
+# Not 100% sure if /var can be nodev
+sed -i -e 's/\(var.*defaults\)/\1,noatime,nodev/' /etc/fstab
+
+# Clean up
+apt-get -qq -y autoremove
+apt-get clean
+rm -f /var/cache/apt/*cache.bin
+rm -f /var/lib/apt/lists/*
+
+echo "user:$ROOT_PASSWORD"|chpasswd
+echo "root:$ROOT_PASSWORD"|chpasswd
+echo 'PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/root/bomsi/lib"' > /etc/environment
+
+
+#cat > /root/setup-${HOST_NAME}_SCRIPT.sh <<EOF
+##! /bin/bash
+#
+#. /root/bomsi/lib/bomsi_vars
+#load_bomsi_functions
+#basic_net_setup eth0 eth1 $IP
+#
+#$ #POST_SCRIPT
+#crontab -l | grep -v '/root/setup-' | crontab -
+#
+#EOF
+#chmod +x /root/setup-${HOST_NAME}_SCRIPT.sh
+#
+#(crontab -l 2>/dev/null; echo '@reboot /root/setup-${HOST_NAME}_SCRIPT.sh > /tmp/setup-${HOST_NAME}_SCRIPT.log) | crontab -
+
+
+  cat > /etc/init.d/firstrun_${HOST_NAME} << EOF
+#!/bin/bash
+#
+# Calling BOMSI for ${HOST_NAME} node
+# 
+# chkconfig: 345 90 10
+# description: Calling BOMSI for ${HOST_NAME} 
+
+case "\$1" in
+  start)
+     /bin/bash
+     echo "\$\$" > /root/${HOST_NAME}-init.d.pid  #PID of this init.d script
+     echo \`date +%Y-%m-%d:%H:%M:%S\` 'Starting init.d script' |tee -a /tmp/BOMSI_STEP.log 
+
+     . /root/bomsi/lib/bomsi_vars
+     load_bomsi_functions
+     echo $PATH > /root/PATH2
+     export PATH=$PATH:/root/bomsi/lib/
+     echo $PATH > /root/PATH2
+
+     #Make sure internet is working
+     N=1
+     while ! ping -c1 centos.org; do sleep 1 && N=[$N+1] && echo $N `date` > ~/wait.log ; done
+     log_step 'Internet seems to work, adding repos'
+
+     #. /root/bomsi/lib/basic_net_setup
+     basic_net_setup eth0 eth1 $IP
+     log_step "The network was configured with IP: $IP"
+     #. /root/bomsi/lib/{bomsi_vars,node_scripts}
+     $POST_SCRIPT
+     log_step 'POST_SCRIPT finished'
+          
+     touch ~/HOST_COMPLETED-${HOST_NAME}
+     chmod 600 /etc/init.d/firstrun_${HOST_NAME}
+     mv /etc/init.d/firstrun_${HOST_NAME} /root/
+     ;;
+     stop|status|restart|reload|force-reload)
+      # do nothing
+     ;;
+  esac
+EOF
+
+   chmod +x /etc/init.d/firstrun_$HOST_NAME 
+   update-rc.d firstrun_$HOST_NAME defaults
+
+
+
+#cp -r /cdrom/bomsi /root/
+
+
+%post --nochroot
+
+# Copy the BOMSI scripts into /root/bomsi
+cp -r /target/media/cdrom/bomsi /target/root/
+chmod -R u+w /target/root/bomsi/
+chmod +x /target/root/bomsi/lib/susti
+cp /target/media/cdrom/bomsi/hosts /target/etc/hosts 
+
+
+
+

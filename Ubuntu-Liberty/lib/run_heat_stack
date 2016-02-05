@@ -1,0 +1,49 @@
+#! /bin/bash
+
+run_heat_stack () {
+
+  #. /root/bomsi/lib/bomsi_vars
+  . ~/admin-openrc.sh
+
+  cat > /root/demo-template.yml << EOF
+heat_template_version: 2015-10-15
+description: Launch a basic instance using the ``m1.tiny`` flavor and one network.
+
+parameters:
+  ImageID:
+    type: string
+    description: Image to use for the instance.
+  NetID:
+    type: string
+    description: Network ID to use for the instance.
+
+resources:
+  server:
+    type: OS::Nova::Server
+    properties:
+      image: { get_param: ImageID }
+      flavor: m1.tiny
+      networks:
+      - network: { get_param: NetID }
+
+outputs:
+  instance_name:
+    description: Name of the instance.
+    value: { get_attr: [ server, name ] }
+  instance_ip:
+    description: IP address of the instance.
+    value: { get_attr: [ server, first_address ] }
+EOF
+
+export NET_ID=$(neutron net-list | awk '/ public / { print $2 }')
+
+heat stack-create -f demo-template.yml -P "ImageID=cirros;NetID=$NET_ID" stack
+
+heat stack-list
+
+heat output-show --all stack
+#heat stack-delete stack
+
+}
+
+

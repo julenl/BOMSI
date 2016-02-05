@@ -1,0 +1,57 @@
+#! /bin/bash
+basic_packages (){
+
+ . /root/bomsi/lib/bomsi_vars
+
+# These two lines remove the annoying errors on locales
+log_step ".   > Reconfigure locales"
+sudo locale-gen de_DE.UTF-8 en_US.UTF-8
+sudo dpkg-reconfigure locales
+
+
+sed  -i 's/us.archive.ubuntu.com/de.archive.ubuntu.com/g' /etc/apt/sources.list
+
+## Chose the fastest repository
+#RELEASE=$(grep deb /etc/apt/sources.list |grep main |grep -v "#" | head -1 |awk '{print $3}')
+RELEASE=$(lsb_release -c |awk '{print $2}')
+
+TMPF=$(cat /etc/apt/sources.list)
+
+#cat > /etc/apt/sources.list <<EOF
+#deb mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE main restricted
+#deb mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE-updates main restricted
+#deb mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE-backports main restricted
+#deb mirror://mirrors.ubuntu.com/mirrors.txt $RELEASE-security main restricted
+#EOF
+#echo "$TMPF" >> /etc/apt/sources.list
+
+log_step ".   > Update repositories"
+apt-get update
+log_step ".   > Upgrade"
+apt-get -y upgrade
+
+log_step ".   > Install crony (ntp)"
+apt-get -y install chrony
+
+# For non "controller" nodes, sync time with controller
+if ! [[ $HOSTNAME =~ "controller" ]];
+  then
+    sed -i '0,/^server/{s/^server .*/server controller iburst/}' /etc/chrony/chrony.conf
+    sed -i '/.*.debian.pool.ntp.org.*/d' /etc/chrony/chrony.conf
+    service chrony restart
+fi
+
+chronyc sources
+
+log_step ".   > Adding the OpenStack repositories"
+# Add repository
+apt-get -y install software-properties-common
+add-apt-repository -y cloud-archive:liberty
+
+# Update
+apt-get -y update && apt-get -y dist-upgrade
+apt-get -y install python-openstackclient
+
+}
+
+
