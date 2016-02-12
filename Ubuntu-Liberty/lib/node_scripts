@@ -2,7 +2,7 @@
 
 setup_controller () {
 
-  load_bomsi_functions  &> /tmp/bomsi_functions_load.log
+  #load_bomsi_functions  
     log_step 'Executing setup_controller function'
     log_step '.> Executing basic_packages'
   basic_packages
@@ -100,6 +100,7 @@ setup_compute () {
   ## This function requires one argument, the index of the compute node
   ## Usage (for the first compute node): setup_compute_node "1"
 
+  #load_bomsi_functions  
     log_step 'Executing setup_compute function'
     log_step ' > Executing basic_packages'
   basic_packages

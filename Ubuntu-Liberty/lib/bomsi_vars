@@ -38,13 +38,14 @@ export USE_VMS="KVM"  #"KVM" for virsh and "NO" in case the machines are already
 #export VM_PREF="OS-t2"
 ## Network Interfaces (VLANS like eth0.1 or eth0:2 also supported)
 export IFACE0=eth0
-export IFACE1=eth1
-export IFACE2=eth2
+#export IFACE1=eth1
+#export IFACE2=eth2
 export IFACE_EXT=eth1
-## IP prefixes for Admin, Tunnel and Storage networks
+## IP prefixes for Admin, external, Tunnel and Storage networks
 export IPPR_A=10.0.0.
-export IPPR_T=10.0.1.
-export IPPR_S=10.0.2.
+export IPPR_EXT=203.0.113.
+#export IPPR_T=10.0.1.
+#export IPPR_S=10.0.2.
 export NETMASK="255.255.255.0"
 export GATEWAY_LN=1
 export GATEWAY=${IPPR_A}${GATEWAY_LN}
@@ -69,11 +70,11 @@ export IP_compute3=${IPPR_A}${IPLD_compute3}
 export CONTROLLER_IP=${IP_controller}
 ## all controllers are running from the controller
 ## This variables are just for generating the /etc/hosts file
-export KEYSTONE_IP=${CONTROLLER_IP}
-export GLANCE_IP=${CONTROLLER_IP}
-export HORIZON_IP=${CONTROLLER_IP}
-export CINDER_IP=${CONTROLLER_IP}
-export NOVA_IP=${CONTROLLER_IP}
+#export KEYSTONE_IP=${CONTROLLER_IP}
+#export GLANCE_IP=${CONTROLLER_IP}
+#export HORIZON_IP=${CONTROLLER_IP}
+#export CINDER_IP=${CONTROLLER_IP}
+#export NOVA_IP=${CONTROLLER_IP}
 #export COMPUTE_LN=31
 #export COMPUTE1_IP=$IPPR_A$COMPUTE_LN
 #export COMPUTE_IPS=$IPPR_A$COMPUTE_LN
@@ -83,12 +84,12 @@ export NEUTRON_LN=21
 export NEUTRON_NODE_IP=$IPPR_A$NEUTRON_LN
 export NEUTRON_NODE_TUNIP=$IPPR_T$NEUTRON_LN #Tunnel network
 export CINDER_LN=41
-export BLOCK_IPS=$IPPR_A$CINDER_LN
-export BLOCK_STOIPS=$IPPR_S$CINDER_LN #Storage Network
-export SWIFT_C_IP=${CONTROLLER_IP}
-export SWIFT_N_LN=51
-export SWIFT_N_IP=$IPPR_A$SWIFT_N_LN
-export OBJECT_IP=$IPPR_A$SWIFT_N_LN
+#export BLOCK_IPS=$IPPR_A$CINDER_LN
+#export BLOCK_STOIPS=$IPPR_S$CINDER_LN #Storage Network
+#export SWIFT_C_IP=${CONTROLLER_IP}
+#export SWIFT_N_LN=51
+#export SWIFT_N_IP=$IPPR_A$SWIFT_N_LN
+#export OBJECT_IP=$IPPR_A$SWIFT_N_LN
 #export HEAT_IP=${CONTROLLER_IP}
 ### PASSWORDS
 export ROOT_PASSWORD=1234

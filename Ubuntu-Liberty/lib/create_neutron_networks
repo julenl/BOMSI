@@ -12,11 +12,17 @@ create_neutron_networks () {
   --provider:network_type flat
 
 
- export PUBLIC_NETWORK_CIDR=$IPPR_A'0/24' #Network
- export START_IP_ADDRESS=$IPPR_A'80'  #1st IP in range
- export END_IP_ADDRESS=$IPPR_A'90'  #last IP
+ export PUBLIC_NETWORK_CIDR=$IPPR_EXT'0/24' #Network
+ export START_IP_ADDRESS=$IPPR_EXT'80'  #1st IP in range
+ export END_IP_ADDRESS=$IPPR_EXT'90'  #last IP
  export DNS_RESOLVER="8.8.4.4"
- export PUBLIC_NETWORK_GATEWAY=$GATEWAY  #Gateway
+ export PUBLIC_NETWORK_GATEWAY=${IPPR_EXT}1 #$GATEWAY  #Gateway
+
+ #export PUBLIC_NETWORK_CIDR='203.0.113.0/24' #Network
+ #export START_IP_ADDRESS='203.0.113.100'  #1st IP in range
+ #export END_IP_ADDRESS='203.0.113.200'  #last IP
+ #export DNS_RESOLVER='8.8.4.4'
+ #export PUBLIC_NETWORK_GATEWAY='203.0.113.1'  #Gateway
 
 
   neutron subnet-create public $PUBLIC_NETWORK_CIDR --name public \
@@ -26,20 +32,24 @@ create_neutron_networks () {
 
   neutron net-create private
 
-  export PRIVATE_NETWORK_CIDR="192.168.1.0/24"
-  export DNS_RESOLVER="8.8.4.4"
-  export PRIVATE_NETWORK_GATEWAY=192.168.1.1
+  export PRIVATE_NETWORK_CIDR='172.16.1.0/24'
+  export PRIVATE_NETWORK_GATEWAY='172.16.1.1'
+
 
   neutron subnet-create private $PRIVATE_NETWORK_CIDR --name private \
   --dns-nameserver $DNS_RESOLVER --gateway $PRIVATE_NETWORK_GATEWAY
 
 
+  
   neutron net-update public --router:external
+
+
 
   . ~/demo-openrc.sh
   neutron router-create router
   . ~/admin-openrc.sh
   neutron router-interface-add router private
+  . ~/demo-openrc.sh
   neutron router-gateway-set router public
 
  #Delete those networks and routers

@@ -5,7 +5,7 @@ install_nova_node_neutron_provider () {
  . /root/bomsi/lib/bomsi_vars
 
   TMPF="/etc/neutron/plugins/ml2/linuxbridge_agent.ini"
-  susti $TMPF linux_bridge "physical_interface_mappings = public:$IFACE1" #IFACE_EXT
+  susti $TMPF linux_bridge "physical_interface_mappings = public:$IFACE_EXT" #IFACE_EXT
   susti $TMPF vxlan "enable_vxlan = False"
   susti $TMPF agent "prevent_arp_spoofing = True"
   susti $TMPF securitygroup "enable_security_group = True" 

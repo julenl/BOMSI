@@ -33,14 +33,16 @@ source get_args.sh
 ## Ensure that all variables are loaded/defined
 
 export BOOT_TIMEOUT="100"   # time until the iso bootloaders loads the default option (seconds x10)
-[ -z ${ROOT_PASSWORD+x} ] && export ROOT_PASSWORD="1234" #Root/User password for the server
 export OUT_DIR="/tmp/custom_iso" # Dir. where the original ISO file is uncompressed and processed
 export OUT_ISO_DIR="$HOME" # Dir. where the new ISO file is generated
 export PATH_TO_ISO="$HOME/ISOS/ubuntu-15.10-server-amd64.iso"
-[ -z ${OUT_ISO_NAME+x} ] && export OUT_ISO_NAME="Ubuntu_custom.iso"
-[ ! -z ${HD+x} ] && export HD="vda" # name of the disk where the system will be installed
-[ ! -z ${VCPUS+x} ] && export VCPUS=2 # No. of virtual CPUs for each test VM
-[ ! -z ${VRAM+x} ]  && export VRAM=4092 # Mb of RAM for test VMs i.e. 8192
+
+## If these variables were not set befor, set them now
+[ -z ${ROOT_PASSWORD+x} ] && export ROOT_PASSWORD="1234" #Root/User password for the server
+[ -z ${OUT_ISO_NAME+x} ] && export OUT_ISO_NAME="BOMSI-$VM_NAME.iso"
+[ -z ${HD+x} ] && export HD="vda" # name of the disk where the system will be installed
+[ -z ${VCPUS+x} ] && export VCPUS=2 # No. of virtual CPUs for each test VM
+[ -z ${VRAM+x} ]  && export VRAM=4092 # Mb of RAM for test VMs i.e. 8192
 
 export NETMASK="255.255.255.0"
 

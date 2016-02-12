@@ -3,7 +3,7 @@
 install_nova_node_neutron () {
 
  . /root/bomsi/lib/bomsi_vars
- . /root/bomsi/lib/install_nova_node_neutron_provide
+ . /root/bomsi/lib/install_nova_node_neutron_provider
  . /root/bomsi/lib/install_nova_node_neutron_self-serv
    print_title "install_neutron_node"
 
@@ -53,6 +53,7 @@ install_nova_node_neutron () {
   service neutron-plugin-linuxbridge-agent restart
 
   # Run this again, otherwise it doesn't work for some reason
+  sleep 5
   service nova-compute restart
 }
 
