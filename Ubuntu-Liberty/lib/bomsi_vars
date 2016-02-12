@@ -52,7 +52,7 @@ export GATEWAY=${IPPR_A}${GATEWAY_LN}
 export DNS_LN=1
 export NAMESERVER=${IPPR_A}${DNS_LN}
 ## Last Digits of IPs of servers
-export IPLD_controller=12
+export IPLD_controller=11
 export IPLD_compute1=31
 export IPLD_compute2=32
 export IPLD_compute3=33
