@@ -107,9 +107,9 @@ iso_kickstart () {
   for HOST in "${KS_MENU_ARR[@]}"
    do 
      ## Set content of post-install
-     echo ">>Generating kickstart file at " $OUT_DIR/files/ks/ks-${HOST}.cfg
+     echo ">> Generating kickstart file at " $OUT_DIR/files/ks/ks-${HOST}.cfg
      export IP=$(eval 'echo $IP_'${HOST}) #IP for current server
-     echo " > machine: ${HOST} => IP= ${IP}"
+     # echo " > machine: ${HOST} => IP= ${IP}"
 
      if [ "$IP" ]; then # If the IP is not empty
        export POST_SCRIPT="""
@@ -138,10 +138,16 @@ ${IPPR_A}$NEUTRON_LN network
 ${IPPR_A}$CINDER_LN block     
 EOF
 
+  echo ">> Compiling ISO file at: ~/$OUT_ISO_NAME"
+  mkisofs -D -r -V "BOMSI_INSTALLER" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ~/$OUT_ISO_NAME $OUT_DIR/files/ 2> /dev/null 
 
-  mkisofs -D -r -V "BOMSI_INSTALLER" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ~/$OUT_ISO_NAME $OUT_DIR/files/ 
+  echo "Changing owner and privileges of the ISO file (default owner is libvirt-qemu)"
+  sudo chown $USER ~/$OUT_ISO_NAME
+  sudo chmod 666 ~/$OUT_ISO_NAME
 
-  which dumpet && dumpet -i ~/$OUT_ISO_NAME
+  which dumpet && \
+  echo ">> Checking ISO file with dumpet" &&\
+  dumpet -i ~/$OUT_ISO_NAME
 
 
 }
