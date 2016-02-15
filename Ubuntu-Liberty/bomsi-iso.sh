@@ -51,8 +51,34 @@ export DS_B=2 # virtual HD Size of 4 Gb for block storage
 export DS_O=2 # virtual HD Size of 2 Gb for object storage
 
 
+
+
+##Detect Operative System
+OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
+if [ "$OP_SYS" == "SUSE" ]
+  then
+    PKG_CMD="sudo zypper -y install "
+elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
+  then
+    PKG_CMD="sudo apt-get -y install "
+elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
+  then
+    PKG_CMD="sudo yum -y install "
+fi
+
+## Make sure all the packages are installed 
+for PKG in curl gettext mkisofs dumpet qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst virt-manager qemu-system
+  do
+   echo $PKG
+   which $PKG > /dev/null || $PKG_CMD $PKG > /tmp/bomsi_install.log
+  done
+
+
+
+
+
 ## If the original ISO is not present, download it into the $PATH_TO_ISO directory
-which curl > /dev/null || sudo apt-get -y install curl >> /tmp/installed_by_bomsi.log
+#which curl > /dev/null || sudo apt-get -y install curl >> /tmp/installed_by_bomsi.log
 if [ ! -f $PATH_TO_ISO ]; then
   mkdir -p ${PATH_TO_ISO%/*} > /dev/null 
   #curl -o $PATH_TO_ISO http://cdimage.ubuntu.com/lubuntu/releases/15.10/release/lubuntu-15.10-desktop-amd64.iso
@@ -60,9 +86,13 @@ if [ ! -f $PATH_TO_ISO ]; then
 fi
 
 
+
+
 ## Load and execute the function that downloads and rebuilds the custom ISO file
 . lib/iso_kickstart
 iso_kickstart
+
+
 
 
 ## The ISO is already created. Now, if $USB_DEV was defined it will install the ISO on that device
