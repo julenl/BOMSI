@@ -50,20 +50,25 @@ start_iso_vm () {
 
   ## If KVM is not installed, install it
 
-  if [[ ! $(which virsh ) ]]
-   then 
-      echo ">> Installing all the KVM packages: qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst"
-      sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst >> /tmp/installed_by_bomsi.log 
-      sudo adduser $USER libvirtd > /dev/null
-      sudo adduser $USER kvm > /dev/null
-  fi
+  #if [[ ! $(which virsh ) ]]
+  # then 
+  #    echo ">> Installing all the KVM packages: qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst"
+  #    sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst >> /tmp/installed_by_bomsi.log 
+  #    sudo adduser $USER libvirtd > /dev/null
+  #    sudo adduser $USER kvm > /dev/null
+  #fi
+  
+  ## Make sure that the current user can use virsh properly
+  getent group $USERNAME |grep libvirtd || sudo adduser $USER libvirtd > /dev/null
+  getent group $USERNAME |grep kvm || sudo adduser $USER kvm > /dev/null
 
-  if [[ ! $( which virt-manager) ]]
-   then 
-      echo ">> Installing all the virt-manager GUI"
-      sudo apt-get -y install virt-manager qemu-system >> /tmp/installed_by_bomsi.log
-      echo ">> The virt-manager GUI might not work properly until you reboot the system, but the VMs should work"
-  fi
+
+  #if [[ ! $( which virt-manager) ]]
+  # then 
+  #    echo ">> Installing all the virt-manager GUI"
+  #    sudo apt-get -y install virt-manager qemu-system >> /tmp/installed_by_bomsi.log
+  #    echo ">> The virt-manager GUI might not work properly until you reboot the system, but the VMs should work"
+  #fi
 
   gen_vnet management ${IPPR_A}1
   gen_vnet ext-net ${IPPR_EXT}1
