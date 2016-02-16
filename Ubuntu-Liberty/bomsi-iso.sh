@@ -58,16 +58,21 @@ OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
 if [ "$OP_SYS" == "SUSE" ]
   then
     PKG_CMD="sudo zypper -y install "
+    PKGS="curl gettext-tools mkisofs qemu-kvm libvirt bridge-utils acpid virt-manager kvm libvirt-python qemu "
+    POST_PKGS="systemctl enable libvirtd.service && systemctl start libvirtd.service"
+
 elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
   then
     PKG_CMD="sudo apt-get -y install "
+    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst virt-manager qemu-system"
+
 elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
   then
     PKG_CMD="sudo yum -y install "
 fi
 
 ## Make sure all the packages are installed 
-for PKG in curl gettext mkisofs dumpet qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst virt-manager qemu-system
+for PKG in "$PKGS"
   do
    echo $PKG
    which $PKG > /dev/null || $PKG_CMD $PKG > /tmp/bomsi_install.log
