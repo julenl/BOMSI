@@ -55,7 +55,7 @@ export DS_O=2 # virtual HD Size of 2 Gb for object storage
 
 ##Detect Operative System
 OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
-if [ "$OP_SYS" == "SUSE" ]
+if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
   then
     PKG_CMD="sudo zypper -y install "
     PKGS="curl gettext-tools mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid virt-manager kvm libvirt-python qemu "
