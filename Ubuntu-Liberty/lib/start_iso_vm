@@ -15,7 +15,7 @@ if ip a |grep inet |grep $2 > /dev/null
 fi
 
 NEW_MAC=$(printf '00:60:2F:%02X:%02X:%02X' $[RANDOM%256] $[RANDOM%256] $[RANDOM%256])
-NEXT_FREE_VIRT_IFACE=$(brctl show |grep virbr |tail -1 |awk '{print $1}' |awk -Fvirbr '{print $2+1}') # The last +1 makes the increment
+NEXT_FREE_VIRT_IFACE=$(sudo brctl show |grep virbr |tail -1 |awk '{print $1}' |awk -Fvirbr '{print $2+1}') # The last +1 makes the increment
 #((NEXT_FREE_VIRT_IFACE++)) # increment the last found value in one
 cat > /tmp/xmlnetfile << EOF
 <network connections='2'>
@@ -59,8 +59,8 @@ start_iso_vm () {
   #fi
   
   ## Make sure that the current user can use virsh properly
-  getent group $USERNAME |grep libvirtd || sudo adduser $USER libvirtd > /dev/null
-  getent group $USERNAME |grep kvm || sudo adduser $USER kvm > /dev/null
+  getent group $USERNAME |grep libvirtd || sudo usermod -a -G libvirtd $USER > /dev/null
+  getent group $USERNAME |grep kvm || sudo usermod -a -G kvm $USER > /dev/null
 
 
   #if [[ ! $( which virt-manager) ]]
