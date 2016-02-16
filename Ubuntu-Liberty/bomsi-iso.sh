@@ -57,7 +57,7 @@ export DS_O=2 # virtual HD Size of 2 Gb for object storage
 OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
 if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
   then
-    PKG_CMD="sudo zypper -y install "
+    PKG_CMD="sudo zypper -n install "
     PKGS="curl gettext-tools mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid virt-manager kvm libvirt-python qemu "
     PKG_CHECK="rpm -q "
     POST_PKGS="systemctl enable libvirtd.service && systemctl start libvirtd.service"
@@ -74,10 +74,10 @@ elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
 fi
 
 ## Make sure all the packages are installed 
-for PKG in "$PKGS"
+for PKG in $PKGS
   do
    echo $PKG
-   $PKG_CHECK $PKG &> /dev/null || $PKG_CMD $PKG > /tmp/bomsi_install.log
+   $PKG_CHECK $PKG &> /dev/null || echo ">>> Installing $PKG" && $PKG_CMD $PKG > /tmp/bomsi_install.log
   done
 
 
