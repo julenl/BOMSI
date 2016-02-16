@@ -76,8 +76,11 @@ fi
 ## Make sure all the packages are installed 
 for PKG in $PKGS
   do
-   echo $PKG
-   $PKG_CHECK $PKG &> /dev/null || echo ">>> Installing $PKG" && $PKG_CMD $PKG > /tmp/bomsi_install.log
+    if ! $PKG_CHECK $PKG > /dev/null; then
+      echo ">>> Installing $PKG"
+      $PKG_CMD $PKG #> /tmp/bomsi_install.log
+    fi
+    $POST_PKGS # This enables libvirtd
   done
 
 

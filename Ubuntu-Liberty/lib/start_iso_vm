@@ -2,7 +2,7 @@
 
 gen_vnet () {
   ## Usage: gen_vnet NAME NET virbr"N" (i.e. virbr1: gen_vnet management 10.0.0.1 1)
-if [[ ! $(sudo virsh net-list |grep $1) ]]; then
+if [[ ! $(virsh net-list |grep $1) ]]; then
 echo ">> Generating virtual network: " $1 " with gateway on " $2
 
   ## Make sure that the subnet is not used by another bridge
@@ -16,7 +16,11 @@ fi
 
 NEW_MAC=$(printf '00:60:2F:%02X:%02X:%02X' $[RANDOM%256] $[RANDOM%256] $[RANDOM%256])
 NEXT_FREE_VIRT_IFACE=$(sudo brctl show |grep virbr |tail -1 |awk '{print $1}' |awk -Fvirbr '{print $2+1}') # The last +1 makes the increment
+
+  ## If not even the "default" net is present (SUSE) start from "virbr0"
+[ -z $NEXT_FREE_VIRT_IFACE ] && NEXT_FREE_VIRT_IFACE="0"
 #((NEXT_FREE_VIRT_IFACE++)) # increment the last found value in one
+
 cat > /tmp/xmlnetfile << EOF
 <network connections='2'>
 <name>$1</name>
@@ -33,9 +37,9 @@ cat > /tmp/xmlnetfile << EOF
 EOF
 
 #virsh net-create /tmp/xmlnetfile #dissapears after reboot
-sudo virsh net-define /tmp/xmlnetfile
-sudo virsh net-start $1
-sudo virsh net-autostart $1 
+virsh net-define /tmp/xmlnetfile
+virsh net-start $1
+virsh net-autostart $1 
 fi
 }
 
@@ -60,7 +64,8 @@ start_iso_vm () {
   
   ## Make sure that the current user can use virsh properly
   getent group $USERNAME |grep libvirtd || sudo usermod -a -G libvirtd $USER > /dev/null
-  getent group $USERNAME |grep kvm || sudo usermod -a -G kvm $USER > /dev/null
+  getent group $USERNAME |grep kvm || sudo usermod -a -G kvm $USER > /dev/null && \
+      sudo usermod -a -G kvm root > /dev/null # This one is for SUSE compatibility
 
 
   #if [[ ! $( which virt-manager) ]]
@@ -96,15 +101,15 @@ start_iso_vm () {
 
   vm_status=$(sudo virsh list |grep $TMPNAME|awk '{print $3}')
   if [ "$vm_status" == "running" ]; then
-    sudo virsh destroy $TMPNAME > /dev/null && echo "VM $TMPNAME Down"
+    virsh destroy $TMPNAME > /dev/null && echo "VM $TMPNAME Down"
   fi
 
   vm_status=$(sudo virsh list --all |grep $TMPNAME|awk '{print $3}')
   echo "$(sudo virsh list |grep $TMPNAME)"
   if [ "$vm_status" == "shut" ]; then
     echo ">> Remove $TMPNAME and delete the associated virtual disk(s)"
-    sudo virsh undefine $TMPNAME &> /dev/null
-    sudo virsh vol-delete --pool default $TMPNAME.img &> /dev/null && echo "VM " $TMPNAME " succesfully removed"
+    virsh undefine $TMPNAME &> /dev/null
+    virsh vol-delete --pool default $TMPNAME.img &> /dev/null && echo "VM " $TMPNAME " succesfully removed"
     ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
   fi
 
@@ -113,7 +118,7 @@ start_iso_vm () {
   sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img &> /dev/null
 
   echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
-  sudo qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 10G > /dev/null # ${DS}G 
+  qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 10G > /dev/null # ${DS}G 
 
   echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
   
