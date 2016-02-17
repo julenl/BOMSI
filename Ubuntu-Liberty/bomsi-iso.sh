@@ -60,7 +60,7 @@ if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
     PKG_CMD="sudo zypper -n install "
     PKGS="curl gettext-tools mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid virt-manager kvm libvirt-python qemu "
     PKG_CHECK="rpm -q "
-    POST_PKGS="systemctl enable libvirtd.service && systemctl start libvirtd.service"
+    POST_PKGS="sudo systemctl enable libvirtd.service && sudo systemctl start libvirtd.service"
 
 elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
   then
