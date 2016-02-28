@@ -67,7 +67,7 @@ elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
   then
     PKG_CMD="sudo apt-get -y install "
     PKG_CHECK="dpkg -l "
-    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst virt-manager qemu-system"
+    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst virt-manager qemu-system" # ubuntu-vm-builder 
 
 elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
   then
@@ -79,7 +79,7 @@ for PKG in $PKGS
   do
     if ! $PKG_CHECK $PKG > /dev/null; then
       echo ">>> Installing $PKG"
-      $PKG_CMD $PKG #> /tmp/bomsi_install.log
+      $PKG_CMD $PKG > /tmp/bomsi_install.log
     fi
     $POST_PKGS # This enables libvirtd
   done

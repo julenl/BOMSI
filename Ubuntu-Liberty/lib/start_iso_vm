@@ -52,9 +52,19 @@ start_iso_vm () {
   #set -e
   #set -x
 
-  ## If KVM is not installed, install it
-  which virsh > /dev/null || echo ">> Installing all the KVM packages" && sudo apt-get -y install qemu-kvm libvirt-bin ubuntu-vm-builder bridge-utils acpid virtinst >> /tmp/installed_by_bomsi.log && sudo adduser $USER libvirtd && sudo adduser $USER kvm
-  which virt-manager  > /dev/null || echo ">> Installing all the virt-manager GUI" && sudo apt-get -y install virt-manager qemu-system && echo ">> The virt-manager GUI might not work properly until you reboot the system, but the VMs should work"
+  ## Make sure that the current user can use virsh properly
+  getent group $USERNAME |grep libvirtd || sudo usermod -a -G libvirtd $USER > /dev/null
+  getent group $USERNAME |grep kvm || sudo usermod -a -G kvm $USER > /dev/null && \
+      sudo usermod -a -G kvm root > /dev/null # This one is for SUSE compatibility
+
+  ## If KVM GUI is not installed, install it
+  if [[ ! $( which virt-manager) ]]
+   then 
+      echo ">> Installing all the virt-manager GUI"
+      $PKG_CMD virt-manager >> /tmp/installed_by_bomsi.log
+      echo ">> The virt-manager GUI might not work properly until you reboot the system. Reboot or execute this same command again."
+     exit
+  fi
 
 
   gen_vnet management ${IPPR_A}1
