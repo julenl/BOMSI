@@ -50,13 +50,14 @@ install_nova_node (){
   VCPUS=$(egrep -c '(vmx|svm)' /proc/cpuinfo)
   [ "$VCPUS" == "0" ] && susti $TMPF libvirt "virt_type = qemu"
 
-
-  # Restart the compute service
-  service nova-compute restart
-
   # Remove the SQLite database
   rm -f /var/lib/nova/nova.sqlite
-  
+
+  # Restart the compute service
+    which nmap || apt-get -y install nmap 
+  while ! nmap -p 8774 controller |grep open; do sleep 2 && echo 'waiting for nova in controller' ; done
+  service nova-compute restart
+
 }
 
 

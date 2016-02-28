@@ -50,11 +50,10 @@ EOF
   . /root/bomsi/lib/create_neutron_networks
   . /root/admin-openrc.sh
   log_step 'Creating /tmp/controller_finish_neutron.sh '
-  #while ! neutron agent-list |grep neutron-openvswitch-agent 
-  #  do
-  #    sleep 10 && log_step 'waiting for network node' |tee -a setup_controller.log
-  #  done
-
+  while ! neutron agent-list |grep Metadata
+    do
+      sleep 10 && log_step 'waiting for network node' |tee -a setup_controller.log
+    done
 
   create_neutron_networks |tee -a  /tmp/setup_controller.log
   log_step 'Network service installation finished'
@@ -73,7 +72,7 @@ EOF
   . /root/admin-openrc.sh
 
   log_step 'Creating /tmp/controller_finish_heat.sh '
-  while ! neutron agent-list |grep neutron-openvswitch-agent 
+  while ! neutron agent-list |grep Metadata 
     do
       sleep 10 && log_step 'waiting for network node for heat' >> /tmp/waiting4compute.log
     done
@@ -111,7 +110,8 @@ setup_compute () {
   while ! nmap -p 3306 controller |grep mysql |grep open; do sleep 2 && echo 'waiting for Rabbitmq in controller' ; done
 
   install_nova_node &> /tmp/setup_compute.log
-    log_step ' > Nova_node installed' 
+    log_step ' > Nova_node installed'
+ 
   install_nova_node_neutron &> /tmp/setup_compute_neu.log
     log_step ' > nova_node_neutron installed' 
 

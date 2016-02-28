@@ -12,9 +12,9 @@ create_neutron_networks () {
   --provider:network_type flat
 
 
- export PUBLIC_NETWORK_CIDR=$IPPR_EXT'0/24' #Network
- export START_IP_ADDRESS=$IPPR_EXT'80'  #1st IP in range
- export END_IP_ADDRESS=$IPPR_EXT'90'  #last IP
+ export PUBLIC_NETWORK_CIDR=${IPPR_EXT}0/24 #Network
+ export START_IP_ADDRESS=$IPPR_EXT'101'  #1st IP in range
+ export END_IP_ADDRESS=$IPPR_EXT'200'  #last IP
  export DNS_RESOLVER="8.8.4.4"
  export PUBLIC_NETWORK_GATEWAY=${IPPR_EXT}1 #$GATEWAY  #Gateway
 
@@ -60,6 +60,8 @@ create_neutron_networks () {
 
  #print_title "Testing Neutron Networkin"
 
+ sleep 3 ## Give some time to finish creating the routers
+
  echo "Check that l3-agent created the networks properly"
  QROUTER=$(ip netns | grep qrouter- |awk '{print $1}')
  ip netns exec $QROUTER ip addr list
@@ -68,6 +70,16 @@ create_neutron_networks () {
 
  neutron port-list
  #neutron port-show #ID
+
+ QROUTER=$(ip netns | grep qrouter- |awk '{print $1}')
+ ip netns exec $QROUTER ip a
+
+ for IDHCP in $(ip netns | grep qdhcp- |awk '{print $1}')
+  do 
+    ip netns exec $IDHCP ip a
+    echo "  "
+  done
+
 
  #To delete them
  #dhcp_delete_namespaces

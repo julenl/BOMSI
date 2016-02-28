@@ -14,7 +14,7 @@ if [[ ! "$PATH" == *"/root/bomsi/lib/"* ]]; then # and not already in $PATH
   export PATH=$PATH:/root/bomsi/lib
   #echo "Added /root/bomsi/lib to the PATH"
 fi
-for file in `ls /root/bomsi/lib/* |grep -v "susti"`
+for file in `ls /root/bomsi/lib/* |grep -v "susti" |grep -v "ini_comparer.py"`
   do 
     . $file
   done

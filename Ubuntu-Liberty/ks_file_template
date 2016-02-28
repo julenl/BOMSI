@@ -38,7 +38,7 @@ cdrom
 zerombr yes
 
 # Partition clearing information
-clearpart --all --initlabel #--drives=$HD
+clearpart --all --initlabel --drives=$HD
 
 # System bootloader configuration
 bootloader --location=mbr

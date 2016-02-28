@@ -35,7 +35,8 @@ source get_args.sh
 export BOOT_TIMEOUT="100"   # time until the iso bootloaders loads the default option (seconds x10)
 export OUT_DIR="/tmp/custom_iso" # Dir. where the original ISO file is uncompressed and processed
 export OUT_ISO_DIR="$HOME" # Dir. where the new ISO file is generated
-export PATH_TO_ISO="$HOME/ISOS/ubuntu-15.10-server-amd64.iso"
+#export PATH_TO_ISO="$HOME/ISOS/ubuntu-15.10-server-amd64.iso"
+export PATH_TO_ISO="$HOME/ISOS/ubuntu-14.04.3-server-amd64.iso"
 
 ## If these variables were not set befor, set them now
 [ -z ${ROOT_PASSWORD+x} ] && export ROOT_PASSWORD="1234" #Root/User password for the server
@@ -92,7 +93,8 @@ for PKG in $PKGS
 if [ ! -f $PATH_TO_ISO ]; then
   mkdir -p ${PATH_TO_ISO%/*} > /dev/null 
   #curl -o $PATH_TO_ISO http://cdimage.ubuntu.com/lubuntu/releases/15.10/release/lubuntu-15.10-desktop-amd64.iso
-  curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/15.10/ubuntu-15.10-server-amd64.iso
+  #curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/15.10/ubuntu-15.10-server-amd64.iso
+  curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/14.04.4/ubuntu-14.04.3-server-amd64.iso
 fi
 
 
