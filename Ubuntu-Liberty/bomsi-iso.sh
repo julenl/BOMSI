@@ -59,7 +59,7 @@ OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
 if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
   then
     PKG_CMD="sudo zypper -n install "
-    PKGS="curl gettext-tools mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid virt-manager kvm libvirt-python qemu "
+    PKGS="curl gettext-tools mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid kvm libvirt-python qemu "
     PKG_CHECK="rpm -q "
     POST_PKGS="sudo systemctl enable libvirtd.service && sudo systemctl start libvirtd.service"
 
@@ -67,7 +67,7 @@ elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
   then
     PKG_CMD="sudo apt-get -y install "
     PKG_CHECK="dpkg -l "
-    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst virt-manager qemu-system" # ubuntu-vm-builder 
+    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system" # virt-manager ubuntu-vm-builder 
 
 elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
   then
@@ -77,9 +77,12 @@ fi
 ## Make sure all the packages are installed 
 for PKG in $PKGS
   do
+    [ -z $UPDATED ] || sudo apt-get -y update
     if ! $PKG_CHECK $PKG > /dev/null; then
       echo ">>> Installing $PKG"
       $PKG_CMD $PKG > /tmp/bomsi_install.log
+    else
+      echo "   $PKG is already installed"
     fi
     $POST_PKGS # This enables libvirtd
   done
