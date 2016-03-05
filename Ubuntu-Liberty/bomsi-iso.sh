@@ -7,14 +7,11 @@ export BOMSI_ISO_OPSYS="Ubuntu"
 ## 
 ## This file is the main driver of BOMSI, the Bash OpenStack Multinode Scripted Installer. 
 ## It calls the following libraries:
-## - bomsi_vars: main variables, such as IPs, passwords, ...
-## - bomsi_lib_conf: library containing functions to install and configure OpenStack 
-## - bomsi_lib_vm: library containing functions to handdle local (test) virtual machines and network settings
-## - bomsi_susti.py: python (OK this is not BASH :P) script for handeling the ".ini" configuration files
-## - gather_packages_os.sh: function for gathering all needed packages for off-line (or just faster) install
-## - get_args.sh: command line argument parser for bomsi-iso.sh (i.e. ./bomsi-iso.sh -h)
-## - gen_ks.sh: library for generating the kickstart and installation files for all machines
-## - bomsi_os_test: library for testing and troubleshooting each OpenStack machine
+## - get_args.sh: parses command line arguments and returns the corresponding variables
+## - lib/bomsi_vars: main variables, such as IPs, passwords, ...
+## - lib/iso_kickstart: rebuilds the original ISO file into an automatic installer one
+## - lib/start_iso_vm: starts a VM with the newly created ISO
+##  the rest of the files on the lib/ directory are scripts for installing OpenStack
 ## 
 ##
 
@@ -92,10 +89,8 @@ for PKG in $PKGS
 
 
 ## If the original ISO is not present, download it into the $PATH_TO_ISO directory
-#which curl > /dev/null || sudo apt-get -y install curl >> /tmp/installed_by_bomsi.log
 if [ ! -f $PATH_TO_ISO ]; then
   mkdir -p ${PATH_TO_ISO%/*} > /dev/null 
-  #curl -o $PATH_TO_ISO http://cdimage.ubuntu.com/lubuntu/releases/15.10/release/lubuntu-15.10-desktop-amd64.iso
   curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/15.10/ubuntu-15.10-server-amd64.iso
   #curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/14.04.4/ubuntu-14.04.3-server-amd64.iso
 fi
