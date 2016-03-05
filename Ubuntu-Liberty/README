@@ -7,7 +7,7 @@ Liberty on Ubuntu 14.04
 ## Introduction
 BOMSI provides a way to get a system looking exactly the same as it should after following step by step the documentation on docs.openstack.org.
 
-This version is a "beta", which does not include as many functionalities as the CentOS one (such as the GUI or the pendrive creator), but it should install OpenStack more or less OK.
+This version is a "beta", which does not include as many functionalities as the CentOS one (such as the GUI), but it should install OpenStack more or less OK.
 
 ## Usage
 
@@ -23,8 +23,9 @@ Build a 2 node system:
   ./bomsi-iso.sh -n=1.compute1
   
 
-(* BOMSI is a project created voluntarily, without any waranty or responsability from the, so far, single author. However, if you need some help with getting it running for testing purposes, just ask.)
+(* BOMSI is a project created voluntarily, without any waranty or responsability from the, so far, single author. However, if you need some help with getting it running for testing purposes, I will be happy to help you.)
 Contact e-mail(*): bomsi at larrucea dot eu
+
 
 
 ## Open issues
@@ -32,4 +33,63 @@ Contact e-mail(*): bomsi at larrucea dot eu
 
 - Something wrong with neutron
 
+
+
+
+## Execution flow (detailed)
+
+When executing bomsi-iso.sh these actions are performed:
+
+  - get-args.sh (parse command line arguments)
+  - set some variables if not already set
+  - detect current operative system
+  - install (and enable) tools to run bomsi (gettext, mkisofs, qemu-kvm, libvirt, …)
+  - if (Ubuntu/CentOS) ISO not present, download it
+  - customize the ISO file
+      lib/iso_kickstart → iso_kickstart
+          - clean previous run
+          - create directories in /tmp
+          - mount ISO file
+          - copy contents to /tmp/$OUT_DIR/files
+          - copy the current (bomsi) directory to /tmp/$OUT_DIR/files/bomsi
+          - add options for booting controller, compute1, … on the ISO boot menu
+          - set the default boot option
+          - generate kickstart files for each machine using the template file
+               and variables from lib/bomsi_vars and lib/node_scripts (*)
+          - generate the /etc/hosts file
+          - compile the new ISO file with mkisofs
+          - check ISO
+  - option to create an install pendrive (or)
+  - option to launch ISO into a virtual machine
+    lib/start_iso_vm → start_iso_vm
+          - make sure we can run virsh commands as regular user
+          - check for virt-manager GUI, if not install and suggest reboot
+          - generate “management” and “ext-net” virtual networks
+          - delete old machines with the same name (provided with the “-n” option)
+          - create a virtual hard disk for the VM with size $DS Gb
+          - launch virtual machine with virt-install
+
+
+(*) kickstart post section:
+    (from file ks_file_template)
+  - set root password
+  - add BOMSI directory to $PATH
+  - generate “init.d” script to run only once after next reboot
+     - wait until internet works
+     - configure networ interfaces
+     - execute content of $POST_SCRIPT for “this” machine
+        which is defined on the lib/node_scripts file as:
+        setup_”machine name”, i.e.: setup_controller
+     - disable this init.d script, so that it does not run on next boot
+
+post section of kickstart (non chrooted):
+  - copy current (BOMSI) directory to /root directory
+  - set executing permissions for scripts
+  - copy the generated /etc/hosts file to the local /etc/
+
+
+ Timing:
+   Recompiling the ISO and launching a VM takes some 30 seconds of execution
+   Installing 2 Ubuntu VMs (controller and compute1) takes some 9 minutes
+   After restarting the new VMs, it takes some 17 extra minutes to execute the init script and get the OpenStack running. 
 
