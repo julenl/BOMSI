@@ -18,9 +18,9 @@ setup_controller () {
   install_neutron_controller &>  /tmp/setup_controller_neutron_controller.log
     log_step '.> Executing install_horizon'
   install_horizon &>  /tmp/setup_controller_horizon.log
-#    log_step '.> Executing install_heat'
-#  install_heat &>  /tmp/setup_controller_heat.log
-#  run_heat_stack &>  /tmp/setup_controller_heat_stack.log
+    log_step '.> Executing install_heat'
+  install_heat &>  /tmp/setup_controller_heat.log
+  #run_heat_stack &>  /tmp/setup_controller_heat_stack.log
 
   #The next part is released as a child script
   # and executed when the first nova node shows up
@@ -33,7 +33,7 @@ setup_controller () {
   log_step 'Creating /tmp/controller_finish_compute.sh '
   while ! nova service-list |grep nova-compute 
     do
-      sleep 10 && log_step 'waiting for compute1 node' >> /tmp/waiting4compute.log
+      sleep 10 && log_step '.   > waiting for compute1 node'
     done
 
   check_compute |tee -a  /tmp/setup_controller.log
@@ -41,7 +41,7 @@ setup_controller () {
 EOF
     log_step '.> Executing /tmp/controller_finish_compute.sh'
   chmod +x /tmp/controller_finish_compute.sh
-  nohup /tmp/controller_finish_compute.sh  
+  nohup /tmp/controller_finish_compute.sh &
 
   # The next child script is executed when ovs at neutron nodecomes up
   cat >/tmp/controller_finish_network.sh<<EOF 
@@ -50,9 +50,9 @@ EOF
   . /root/bomsi/lib/create_neutron_networks
   . /root/admin-openrc.sh
   log_step 'Creating /tmp/controller_finish_neutron.sh '
-  while ! neutron agent-list |grep Metadata
+  while ! neutron agent-list |grep compute1
     do
-      sleep 10 && log_step 'waiting for network node' |tee -a setup_controller.log
+      sleep 10 && log_step '.   > waiting for neutron setup to finish' 
     done
 
   create_neutron_networks |tee -a  /tmp/setup_controller.log
@@ -60,7 +60,7 @@ EOF
 EOF
     log_step '.> Executing /tmp/controller_finish_network.sh'
   chmod +x /tmp/controller_finish_network.sh
-  nohup /tmp/controller_finish_network.sh 
+  nohup /tmp/controller_finish_network.sh &
       
 
   #This will send create and execute a heat template once everything else is up
@@ -72,23 +72,23 @@ EOF
   . /root/admin-openrc.sh
 
   log_step 'Creating /tmp/controller_finish_heat.sh '
-  while ! neutron agent-list |grep Metadata 
+  while ! neutron agent-list |grep compute1 
     do
-      sleep 10 && log_step 'waiting for network node for heat' >> /tmp/waiting4compute.log
+      sleep 10 && log_step '.   > waiting for neutron setup to finish for heat'
     done
   while ! nova service-list |grep nova-compute 
     do
-      sleep 10 && log_step 'waiting for compute1 node for heat' >> /tmp/waiting4compute.log
+      sleep 10 && log_step '.   > waiting for compute1 node for heat' 
     done
 
-  install_heat && heat_template > /tmp/heat_template.log
+  sleep 10
+  run_heat_stack > /tmp/heat_stack.log
 
   log_step 'Orchestation (heat) service installation finished'
 EOF
     log_step '.> Executing /tmp/controller_finish_heat.sh'
   chmod +x /tmp/controller_finish_heat.sh
-  nohup /tmp/controller_finish_heat.sh 
-
+  nohup /tmp/controller_finish_heat.sh &
   
 }
 
@@ -105,15 +105,41 @@ setup_compute () {
   basic_packages
 
   #basic_net_ext $IFACE_EXT
-    log_step ' > Network interfaces configured, waiting for controller' 
+  log_step ' > basic_packages executed, waiting for MySQL in controller' 
   which nmap || apt-get -y install nmap 
-  while ! nmap -p 3306 controller |grep mysql |grep open; do sleep 2 && echo 'waiting for Rabbitmq in controller' ; done
+  while ! nmap -p 3306 controller |grep mysql |grep open; do sleep 2 && log_step '.   > waiting for MySQL in controller' ; done
+  log_step '. > MySQL ready on controller, installing nova-compute'
 
   install_nova_node &> /tmp/setup_compute.log
-    log_step ' > Nova_node installed'
+    log_step '. > Nova_node installed'
  
   install_nova_node_neutron &> /tmp/setup_compute_neu.log
-    log_step ' > nova_node_neutron installed' 
+    log_step '. > nova_node_neutron installed' 
+
+  #The next part is released as a child script
+  # and executed when the port 8774 (nova-api) opens up in controller
+    log_step '.> Generating script to wait for nova in controller'
+  cat >/tmp/controller_finish_compute-node.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/bomsi_vars 
+  . /root/bomsi/lib/check_compute 
+  . /root/admin-openrc.sh
+  log_step 'Creating /tmp/controller_finish_compute.sh '
+  # Restart the compute service
+  which nmap || apt-get -y install nmap 
+  while ! nmap controller -p 8774 |grep 8774 |grep open 
+    do
+      sleep 10 && log_step '.   > waiting for nova in controller'
+    done
+
+  sleep 10
+  service nova-compute restart
+
+  log_step 'Compute service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_compute-node.sh'
+  chmod +x /tmp/controller_finish_compute-node.sh
+  nohup /tmp/controller_finish_compute-node.sh &
 
 }
 
