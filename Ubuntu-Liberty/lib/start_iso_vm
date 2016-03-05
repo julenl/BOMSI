@@ -1,6 +1,7 @@
 #! /bin/bash
 
 gen_vnet () {
+  ## Creates a virtual network if not already present, and if subnet not already in use
   ## Usage: gen_vnet NAME NET virbr"N" (i.e. virbr1: gen_vnet management 10.0.0.1 1)
 if [[ ! $(virsh net-list |grep $1) ]]; then
 echo ">> Generating virtual network: " $1 " with gateway on " $2
@@ -19,7 +20,6 @@ NEXT_FREE_VIRT_IFACE=$(sudo brctl show |grep virbr |tail -1 |awk '{print $1}' |a
 
   ## If not even the "default" net is present (SUSE) start from "virbr0"
 [ -z $NEXT_FREE_VIRT_IFACE ] && NEXT_FREE_VIRT_IFACE="1"
-#((NEXT_FREE_VIRT_IFACE++)) # increment the last found value in one
 
 cat > /tmp/xmlnetfile << EOF
 <network connections='2'>
@@ -69,8 +69,6 @@ start_iso_vm () {
 
   gen_vnet management ${IPPR_A}1
   gen_vnet ext-net ${IPPR_EXT}1
-  #gen_vnet tunnel ${IPPR_T}1
-  #gen_vnet storage ${IPPR_S}1
 
   if [ -z ${VM_NAME+x} ]; then # If VM name was not set... 
     TMPNAME="Ubuntu_OS-test"
@@ -84,18 +82,13 @@ start_iso_vm () {
   ## Make sure the user has permission to create VMs
   sudo chmod 777 /var/lib/libvirt/images/  > /dev/null 
  
-  ## Delete an old VM with the same name
-  #virsh list --all |grep $TMPNAME |grep running > /dev/null && virsh destroy $TMPNAME 
-  #virsh list --all |grep $TMPNAME > /dev/null && virsh undefine $TMPNAME
-  #|| $TMPNAME does not exist yet
-  #echo "TMPNAME="$TMPNAME
-
-
+  ## Stop an old VM with the same name
   vm_status=$(sudo virsh list |grep $TMPNAME|awk '{print $3}')
   if [ "$vm_status" == "running" ]; then
     sudo virsh destroy $TMPNAME && echo "VM " $TMPNAME " Down"
   fi
 
+  ## Delete an old VM with the same name
   vm_status=$(sudo virsh list --all |grep $TMPNAME|awk '{print $3}')
   echo "$(sudo virsh list |grep $TMPNAME)"
   if [ "$vm_status" == "shut" ]; then
@@ -111,7 +104,6 @@ start_iso_vm () {
   sudo qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 ${DS}G 
 
   echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
-  ## Attach 1 extra virtual HD for block and 2 for object VMs, otherwise just root HD
   
     echo ">> Using command:"
     echo """virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME """ 
