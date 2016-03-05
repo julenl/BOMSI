@@ -22,7 +22,7 @@ EOF
 
 
 iso_kickstart () {
-
+  ## Recompile the ISO file with customized menus and scripts
 
   # Umount previously mounted ISO and files
   df -h |grep /dev/loop0 > /dev/null && sudo umount /dev/loop0
@@ -67,11 +67,6 @@ iso_kickstart () {
     KS_INDEX=$((KS_INDEX+1)) 
   done
 
-
-  #for OPT_MENU in $KS_MENU_LIST
-  #  do
-  #    ksf_menu_add $OPT_MENU "Kickstart $OPT_MENU"  
-  #  done
 
   ## Try to set boot menu to auto select the right option
   for OPT_MENU in "${KS_MENU_ARR[@]}"
