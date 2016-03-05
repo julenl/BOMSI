@@ -32,7 +32,8 @@ install_nova_node_neutron () {
   susti $TMPF DEFAULT "service_plugins = router"
   susti $TMPF DEFAULT "allow_overlapping_ips = True"
   susti $TMPF DEFAULT "verbose = True"
-
+  # We don't need this line
+  sed -i 's/identity_uri.*//' $TMPF
 
   #install_nova_node_neutron_provider
   install_nova_node_neutron_self-serv
