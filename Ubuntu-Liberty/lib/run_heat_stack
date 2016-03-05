@@ -37,7 +37,7 @@ EOF
 
 export NET_ID=$(neutron net-list | awk '/ public / { print $2 }')
 
-heat stack-create -f demo-template.yml -P "ImageID=cirros;NetID=$NET_ID" stack
+heat stack-create -f /root/demo-template.yml -P "ImageID=cirros;NetID=$NET_ID" stack
 
 heat stack-list
 
