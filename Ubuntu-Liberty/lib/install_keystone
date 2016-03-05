@@ -120,6 +120,9 @@ EOF
   export OS_URL=http://controller:35357/v3
   export OS_IDENTITY_API_VERSION=3
 
+  ## Double check that keystone is running properly, before continuing:
+  netstat -tulpen |grep 5000  || service apache2 restart
+  netstat -tulpen |grep 35357 || service apache2 restart
 
   openstack service create \
    --name keystone --description "OpenStack Identity" identity
