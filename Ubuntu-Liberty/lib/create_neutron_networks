@@ -51,6 +51,7 @@ create_neutron_networks () {
   neutron router-interface-add router private
   . ~/demo-openrc.sh
   neutron router-gateway-set router public
+  . ~/admin-openrc.sh
 
  #Delete those networks and routers
 # neutron router-gateway-clear router && neutron router-interface-delete router private && neutron router-delete router && neutron net-delete private && neutron net-delete public
