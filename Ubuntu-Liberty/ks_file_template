@@ -63,29 +63,6 @@ part swap --size 1024
 part /boot --fstype ext4 --size 256 --asprimary 
 
 
-
-
-## Advanced partition
-## The last lv specified will take up the remaining space of the vg. To get
-## around that add up all your disk sizes and set this value. It appears to
-## factor in the size of non lvm partitions as well.
-#preseed partman-auto-lvm/guided_size string 8GB
-#part /boot --fstype=ext4 --size=512 --asprimary
-#part pv.1 --grow --size=1 --asprimary
-#volgroup vg0 --pesize=4096 pv.1
-#logvol / --fstype=ext4 --name=root --vgname=vg0 --size=1024
-#logvol /usr --fstype=ext4 --name=usr --vgname=vg0 --size=2048
-#logvol /var --fstype=ext4 --name=var --vgname=vg0 --size=1536
-#logvol swap --name=swap --vgname=vg0 --size=2048 --maxsize=2048
-#logvol /home --fstype=ext4 --name=home --vgname=vg0 --size=512
-
-
-
-
-
-
-
-
 # Don't install recommended items by default
 preseed base-installer/install-recommends boolean true
 
@@ -127,17 +104,6 @@ vim
 
 %post
 
-# Change default umask from 022 to 027 (not world readable). Remove this line
-# if you don't want that
-sed -i -e 's/^\(UMASK\W*\)[0-9]\+$/\1027/' /etc/login.defs
-
-# Add noatime to /etc/fstab
-sed -i -e 's/\(errors=remount-ro\)/noatime,\1/' /etc/fstab
-sed -i -e 's/\(boot.*defaults\)/\1,noatime,nodev/' /etc/fstab
-sed -i -e 's/\(home.*defaults\)/\1,noatime,nodev/' /etc/fstab
-sed -i -e 's/\(usr.*defaults\)/\1,noatime,nodev/' /etc/fstab
-# Not 100% sure if /var can be nodev
-sed -i -e 's/\(var.*defaults\)/\1,noatime,nodev/' /etc/fstab
 
 # Clean up
 apt-get -qq -y autoremove
@@ -148,22 +114,6 @@ rm -f /var/lib/apt/lists/*
 echo "user:$ROOT_PASSWORD"|chpasswd
 echo "root:$ROOT_PASSWORD"|chpasswd
 echo 'PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/root/bomsi/lib"' > /etc/environment
-
-
-#cat > /root/setup-${HOST_NAME}_SCRIPT.sh <<EOF
-##! /bin/bash
-#
-#. /root/bomsi/lib/bomsi_vars
-#load_bomsi_functions
-#basic_net_setup eth0 eth1 $IP
-#
-#$ #POST_SCRIPT
-#crontab -l | grep -v '/root/setup-' | crontab -
-#
-#EOF
-#chmod +x /root/setup-${HOST_NAME}_SCRIPT.sh
-#
-#(crontab -l 2>/dev/null; echo '@reboot /root/setup-${HOST_NAME}_SCRIPT.sh > /tmp/setup-${HOST_NAME}_SCRIPT.log) | crontab -
 
 
   cat > /etc/init.d/firstrun_${HOST_NAME} << EOF
@@ -182,9 +132,7 @@ case "\$1" in
 
      . /root/bomsi/lib/bomsi_vars
      load_bomsi_functions
-     echo $PATH > /root/PATH2
      export PATH=$PATH:/root/bomsi/lib/
-     echo $PATH > /root/PATH2
 
      #Make sure internet is working
      N=1
@@ -210,10 +158,6 @@ EOF
 
    chmod +x /etc/init.d/firstrun_$HOST_NAME 
    update-rc.d firstrun_$HOST_NAME defaults
-
-
-
-#cp -r /cdrom/bomsi /root/
 
 
 %post --nochroot
