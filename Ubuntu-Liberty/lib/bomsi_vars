@@ -24,6 +24,10 @@ log_step (){
   ## Write timestamp and sentence to /tmp/BOMSI_STEP.log
   DATE=`date +%Y-%m-%d:%H:%M:%S`
   echo $DATE " " $1 |tee -a /tmp/BOMSI_STEP.log
+}
+run_or_exit () {
+  ## Usage: run_or_exit "ls ~/BOMSI-controller.iso"
+  eval $1 &> /dev/null || (printf "\033[0;31mFATAL ERROR: command '$1' did not work\nexiting\n\033[0m"; exit)
 } 
 sustivar () {
 # Substitute the value of a variable in this file
