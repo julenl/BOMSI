@@ -97,7 +97,7 @@ iso_kickstart () {
 
 
   ## Generate kickstart files for each node from template
-  which envsubst > /dev/null || exit   
+  run_or_exit "envsubst --version"
   
   for HOST in "${KS_MENU_ARR[@]}"
    do 
@@ -133,16 +133,18 @@ ${IPPR_A}$NEUTRON_LN network
 ${IPPR_A}$CINDER_LN block     
 EOF
 
+  run_or_exit "mkisofs -version"
+
   echo ">> Compiling ISO file at: ~/$OUT_ISO_NAME"
-  mkisofs -D -r -V "BOMSI_INSTALLER" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ~/$OUT_ISO_NAME $OUT_DIR/files/ 2> /dev/null 
+  mkisofs -D -r -V "BOMSI_INSTALLER" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o $OUT_ISO_DIR/$OUT_ISO_NAME $OUT_DIR/files/ 2> /dev/null 
 
   echo "Changing owner and privileges of the ISO file (default owner is libvirt-qemu)"
-  sudo chown $USER ~/$OUT_ISO_NAME
-  sudo chmod 666 ~/$OUT_ISO_NAME
+  sudo chown $USER $OUT_ISO_DIR/$OUT_ISO_NAME
+  sudo chmod 666 $OUT_ISO_DIR/$OUT_ISO_NAME
 
-  which dumpet && \
+  which dumpet &>/dev/null && \
   echo ">> Checking ISO file with dumpet" &&\
-  dumpet -i ~/$OUT_ISO_NAME
+  run_or_exit "dumpet -i $OUT_ISO_DIR/$OUT_ISO_NAME"
 
 
 }

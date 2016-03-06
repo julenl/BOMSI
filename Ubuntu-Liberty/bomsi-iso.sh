@@ -78,8 +78,8 @@ for PKG in $PKGS
     if ! $PKG_CHECK $PKG > /dev/null; then
       echo ">>> Installing $PKG"
       $PKG_CMD $PKG > /tmp/bomsi_install.log
-    else
-      echo "   $PKG is already installed"
+    #else
+    #  echo "   $PKG is already installed"
     fi
     $POST_PKGS # This enables libvirtd
   done
@@ -95,13 +95,12 @@ if [ ! -f $PATH_TO_ISO ]; then
   #curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/14.04.4/ubuntu-14.04.3-server-amd64.iso
 fi
 
-
+run_or_exit "[ -f $PATH_TO_ISO ]"
 
 
 ## Load and execute the function that downloads and rebuilds the custom ISO file
 . lib/iso_kickstart
 iso_kickstart
-
 
 
 
@@ -113,12 +112,16 @@ iso_kickstart
 ## Copy (install) the newly created ISO into a pendrive
 
 if [ ! -z ${USB_DEV+x} ]; then
+  ## check if device is present
+  run_or_exit "sudo fdisk -l |grep $USB_DEV"
   echo ">> clean the content of the pendrive"
   sudo dd if=/dev/zero of=$USB_DEV bs=512 count=1
   #echo -e "o\nn\np\n1\n\n\na\n1\nw" | sudo fdisk $USB_DEV
   echo " "
   echo ">> COPY THE ISO FILE TO THE PENDRIVE IN $USB_DEV "
   echo " "
+  ## check if ISO file is present
+  run_or_exit "[ -f $PATH_TO_ISO/$OUT_ISO_NAME ]"
   sudo dd if=$OUT_ISO_DIR/$OUT_ISO_NAME of=$USB_DEV bs=512 
   echo ">> Testing USB device"
   sudo qemu-system-x86_64 -enable-kvm -m 1024 -hda $USB_DEV
@@ -132,12 +135,17 @@ fi
 
 if [ -z ${INSTALL_VM+x} ]; then 
   echo ">> Not starting VM."; 
-else 
+else
+  ## check if virsh works
+  run_or_exit "virsh list"
+  run_or_exit "virt-install --version"
+  ## check if ISO file is present
+  run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
   . $THISD/lib/start_iso_vm 
   start_iso_vm 
 fi
 
-
+echo "BOMSI finished successfully"
 
 
 
