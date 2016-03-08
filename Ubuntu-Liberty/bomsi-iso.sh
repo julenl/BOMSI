@@ -109,6 +109,7 @@ echo ">> Customizing the ISO file"
 . lib/iso_kickstart
 iso_kickstart
 
+echo ">> The ISO file has been generated"
 
 
 ## The ISO is already created. Now, if $USB_DEV was defined it will install the ISO on that device
@@ -144,10 +145,12 @@ if [ -z ${INSTALL_VM+x} ]; then
   echo ">> Not starting VM."; 
 else
   ## check if virsh works
-  run_or_exit "virsh list"
-  run_or_exit "virt-install --version"
+  sudo virsh list &> /dev/null || $PKG_CMD libvirt-bin
+  run_or_exit "sudo virsh list"
+  run_or_exit "sudo virt-install --version"
   ## check if ISO file is present
   run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
+  echo ">> Starting VM with the ISO" 
   . $THISD/lib/start_iso_vm 
   start_iso_vm 
 fi

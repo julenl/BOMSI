@@ -10,7 +10,7 @@ echo ">> Generating virtual network: " $1 " with gateway on " $2
   if ip a |grep inet |grep $2 > /dev/null
    then
      OCC_IFACE=$(ip a |grep inet |grep "$2" |awk 'NF>1{print $NF}')  
-     echo "### ERROR: subnet $2 already in use by $OCC_IFACE"
+     printf "\033[0;31m### ERROR: subnet $2 already in use by $OCC_IFACE\033[0m\n"
      echo "### You might need to edit IPPR_A or IPPR_EXT variables in the lib/bomsi_vars file"
      exit
   fi
@@ -62,7 +62,7 @@ start_iso_vm () {
    then 
       echo ">> Installing all the virt-manager GUI"
       $PKG_CMD virt-manager >> /tmp/installed_by_bomsi.log
-      echo ">> The virt-manager GUI might not work properly until you reboot the system. Reboot or execute this same command again."
+      printf "\033[0;31mWARNING: The virt-manager GUI might not work properly until you reboot the system. Reboot or execute this same command again.\033[0m\n"
      exit
   fi
 
