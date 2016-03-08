@@ -27,7 +27,10 @@ log_step (){
 }
 run_or_exit () {
   ## Usage: run_or_exit "ls ~/BOMSI-controller.iso"
-  eval $1 &> /dev/null || (printf "\033[0;31mFATAL ERROR: command '$1' did not work\nexiting\n\033[0m"; exit)
+  if ! eval $1 &> /dev/null; then
+   printf "\033[0;31mFATAL ERROR: command '$1' did not work\nexiting\n\033[0m"
+   exit
+  fi
 } 
 sustivar () {
 # Substitute the value of a variable in this file

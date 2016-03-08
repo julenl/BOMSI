@@ -50,21 +50,22 @@ export DS_O=2 # virtual HD Size of 2 Gb for object storage
 
 
 
-
 ##Detect Operative System
 OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
 if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
   then
     PKG_CMD="sudo zypper -n install "
-    PKGS="curl gettext-tools mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid kvm libvirt-python qemu "
+    PKGS="curl gettext-runtime mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid libvirt-python qemu "
     PKG_CHECK="rpm -q "
-    POST_PKGS="sudo systemctl enable libvirtd.service && sudo systemctl start libvirtd.service"
+    POST_PKGS='sudo systemctl status libvirtd > /dev/null || sudo systemctl enable libvirtd.service && sudo systemctl start libvirtd.service'
+    KVM_GROUPS="libvirt kvm"
 
 elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
   then
     PKG_CMD="sudo apt-get -y install "
     PKG_CHECK="dpkg -l "
     PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system" # virt-manager ubuntu-vm-builder 
+    KVM_GROUPS="libvirtd kvm"
 
 elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
   then
@@ -74,15 +75,19 @@ fi
 ## Make sure all the packages are installed 
 for PKG in $PKGS
   do
-    [ -z $UPDATED ] || sudo apt-get -y update
-    if ! $PKG_CHECK $PKG > /dev/null; then
+    [ -z "$UPDATED" ] || sudo apt-get -y update
+    if ! $PKG_CHECK $PKG &> /dev/null; then
       echo ">>> Installing $PKG"
-      $PKG_CMD $PKG > /tmp/bomsi_install.log
+      $PKG_CMD $PKG &> /tmp/bomsi_install.log
     #else
     #  echo "   $PKG is already installed"
     fi
-    $POST_PKGS # This enables libvirtd
   done
+
+ [ -z "$POST_PKGS" ] && \
+echo ">> Starting and enabling libvirtd (if necessary)" && \
+echo $POST_PKGS && \
+eval $POST_PKGS # This enables libvirtd
 
 
 
@@ -90,6 +95,7 @@ for PKG in $PKGS
 
 ## If the original ISO is not present, download it into the $PATH_TO_ISO directory
 if [ ! -f $PATH_TO_ISO ]; then
+  echo ">> Downloading ISO to: $PATH_TO_ISO"
   mkdir -p ${PATH_TO_ISO%/*} > /dev/null 
   curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/15.10/ubuntu-15.10-server-amd64.iso
   #curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/14.04.4/ubuntu-14.04.3-server-amd64.iso
@@ -99,6 +105,7 @@ run_or_exit "[ -f $PATH_TO_ISO ]"
 
 
 ## Load and execute the function that downloads and rebuilds the custom ISO file
+echo ">> Customizing the ISO file"
 . lib/iso_kickstart
 iso_kickstart
 
