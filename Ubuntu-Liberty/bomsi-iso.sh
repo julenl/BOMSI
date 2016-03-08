@@ -73,9 +73,10 @@ elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
 fi
 
 ## Make sure all the packages are installed 
+#[ -z "$UPDATED" ] ||
+sudo apt-get -y update &> /dev/null
 for PKG in $PKGS
   do
-    [ -z "$UPDATED" ] || sudo apt-get -y update
     if ! $PKG_CHECK $PKG &> /dev/null; then
       echo ">>> Installing $PKG"
       $PKG_CMD $PKG &> /tmp/bomsi_install.log
