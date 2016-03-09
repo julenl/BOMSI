@@ -15,10 +15,10 @@ export BOMSI_ISO_OPSYS="Ubuntu"
 ## 
 ##
 
-
+echo "### Starting BOMSI ###"
 
 export THISD=${PWD}
-
+echo ">> Loading bomsi variables from $THISD/lib/bomsi_vars"
 [ -f $THISD/lib/bomsi_vars ] && . $THISD/lib/bomsi_vars
 
 ## Parse command line options
@@ -63,8 +63,9 @@ if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
 elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
   then
     PKG_CMD="sudo apt-get -y install "
+    pkg_installed () { dpkg -l $1 |grep "ii"; }
     PKG_CHECK="dpkg -l "
-    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system" # virt-manager ubuntu-vm-builder 
+    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system " # virt-manager ubuntu-vm-builder 
     KVM_GROUPS="libvirtd kvm"
 
 elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
@@ -77,7 +78,7 @@ fi
 sudo apt-get -y update &> /dev/null
 for PKG in $PKGS
   do
-    if ! $PKG_CHECK $PKG &> /dev/null; then
+    if ! pkg_installed $PKG &> /dev/null; then
       echo ">>> Installing $PKG"
       $PKG_CMD $PKG &> /tmp/bomsi_install.log
     #else
