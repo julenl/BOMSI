@@ -68,7 +68,7 @@ elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
     PKG_UPDATE="sudo apt-get -y update"
     pkg_installed () { dpkg -l $1 |grep "ii"; }
     #PKG_CHECK="dpkg -l "
-    PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system " # virt-manager ubuntu-vm-builder 
+    PKGS="curl gettext genisoimage dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system " # virt-manager ubuntu-vm-builder 
     KVM_GROUPS="libvirtd kvm"
 
 elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
@@ -77,7 +77,9 @@ elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
 fi
 
 ## Make sure all the packages are installed 
-#[ -z "$UPDATED" ] ||
+sudo -n ls >/dev/null || \
+echo '>> Root password is required installing the packages'
+
 $PKG_UPDATE &> /dev/null
 for PKG in $PKGS
   do
@@ -150,9 +152,9 @@ if [ -z ${INSTALL_VM+x} ]; then
   echo ">> Not starting VM."; 
 else
   ## check if virsh works
-  virsh list &> /dev/null || $PKG_CMD libvirt-bin
-  run_or_exit "virsh list"
-  run_or_exit "virt-install --version"
+  #virsh list &> /dev/null || $PKG_CMD libvirt-bin
+  #run_or_exit "virsh list"
+  #run_or_exit "virt-install --version"
   ## check if ISO file is present
   run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
   echo ">> Starting VM with the ISO" 

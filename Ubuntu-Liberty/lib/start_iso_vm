@@ -53,9 +53,20 @@ start_iso_vm () {
   #set -x
 
   ## Make sure that the current user can use virsh properly
-  getent group $USERNAME |grep libvirtd || sudo usermod -a -G libvirtd $USER > /dev/null
-  getent group $USERNAME |grep kvm || sudo usermod -a -G kvm $USER > /dev/null && \
-      sudo usermod -a -G kvm root > /dev/null # This one is for SUSE compatibility
+
+  ## Usage: add_user_to_group USER GROUP
+  add_user_to_group () { getent group $1 |grep $2 || sudo usermod -a -G $2 $1 > /dev/null; }
+  
+  for $GROUP_I in $KVM_GROUPS; do 
+    add_user_to_group $USER $GROUP_I
+    add_user_to_group root  $GROUP_I
+  done
+   
+
+  ## Check that the virsh commands work
+  virsh list &> /dev/null || $PKG_CMD libvirt-bin
+  run_or_exit "sudo virsh list"
+  run_or_exit "sudo virt-install --version"
 
   ## If KVM GUI is not installed, install it
   if [[ ! $( which virt-manager) ]]

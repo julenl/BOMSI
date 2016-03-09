@@ -34,6 +34,7 @@ iso_kickstart () {
 
   ## Mount the original ISO and copy the files so that we can edit them
   mkdir -p /tmp/mountiso/
+  sudo -n ls > /dev/null || \
   echo '>> Root password is required for mounting the iso image.'
   sudo mount -o loop $PATH_TO_ISO /tmp/mountiso/ &> /dev/null
 
