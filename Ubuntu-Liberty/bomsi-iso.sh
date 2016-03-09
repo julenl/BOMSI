@@ -55,16 +55,19 @@ OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
 if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
   then
     PKG_CMD="sudo zypper -n install "
-    PKGS="curl gettext-runtime mkisofs qemu-kvm libvirt libvirt-client bridge-utils acpid libvirt-python qemu "
-    PKG_CHECK="rpm -q "
+    PKG_UPDATE="sudo zypper -n update"
+    PKGS="curl gettext-runtime mkisofs qemu-kvm libvirt virt-install libvirt-client bridge-utils acpid libvirt-python qemu "
+    pkg_check () { rpm -q $1 ; }
+    #PKG_CHECK="rpm -q "
     POST_PKGS='sudo systemctl status libvirtd > /dev/null || sudo systemctl enable libvirtd.service && sudo systemctl start libvirtd.service'
     KVM_GROUPS="libvirt kvm"
 
 elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
   then
     PKG_CMD="sudo apt-get -y install "
+    PKG_UPDATE="sudo apt-get -y update"
     pkg_installed () { dpkg -l $1 |grep "ii"; }
-    PKG_CHECK="dpkg -l "
+    #PKG_CHECK="dpkg -l "
     PKGS="curl gettext mkisofs dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system " # virt-manager ubuntu-vm-builder 
     KVM_GROUPS="libvirtd kvm"
 
@@ -75,7 +78,7 @@ fi
 
 ## Make sure all the packages are installed 
 #[ -z "$UPDATED" ] ||
-sudo apt-get -y update &> /dev/null
+$PKG_UPDATE &> /dev/null
 for PKG in $PKGS
   do
     if ! pkg_installed $PKG &> /dev/null; then
@@ -86,10 +89,10 @@ for PKG in $PKGS
     fi
   done
 
- [ -z "$POST_PKGS" ] && \
+ [ -z "$POST_PKGS" ] || \
 echo ">> Starting and enabling libvirtd (if necessary)" && \
 echo $POST_PKGS && \
-eval $POST_PKGS # This enables libvirtd
+ eval "$POST_PKGS" # This enables libvirtd
 
 
 
@@ -147,9 +150,9 @@ if [ -z ${INSTALL_VM+x} ]; then
   echo ">> Not starting VM."; 
 else
   ## check if virsh works
-  sudo virsh list &> /dev/null || $PKG_CMD libvirt-bin
-  run_or_exit "sudo virsh list"
-  run_or_exit "sudo virt-install --version"
+  virsh list &> /dev/null || $PKG_CMD libvirt-bin
+  run_or_exit "virsh list"
+  run_or_exit "virt-install --version"
   ## check if ISO file is present
   run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
   echo ">> Starting VM with the ISO" 
