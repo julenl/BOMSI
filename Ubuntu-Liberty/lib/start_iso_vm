@@ -57,14 +57,14 @@ start_iso_vm () {
   ## Usage: add_user_to_group USER GROUP
   add_user_to_group () { getent group $1 |grep $2 || sudo usermod -a -G $2 $1 > /dev/null; }
   
-  for $GROUP_I in $KVM_GROUPS; do 
+  for GROUP_I in $KVM_GROUPS; do 
     add_user_to_group $USER $GROUP_I
     add_user_to_group root  $GROUP_I
   done
    
 
   ## Check that the virsh commands work
-  virsh list &> /dev/null || $PKG_CMD libvirt-bin
+  virsh list &> /dev/null || $PKG_CMD libvirt-bin &> /dev/null
   run_or_exit "sudo virsh list"
   run_or_exit "sudo virt-install --version"
 
@@ -74,8 +74,11 @@ start_iso_vm () {
       echo ">> Installing all the virt-manager GUI"
       $PKG_CMD virt-manager >> /tmp/installed_by_bomsi.log
       printf "\033[0;31mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
-      echo "As a workaround we'll exectute: su - $USER"
-      sudo su - $USER
+      echo "As a workaround we'll exectute 'su - $USER' and try the bomsi command again"
+      ## for some reason this directory has sometimes wrong permissions
+      [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || sudo chown -R $USER ~/.cache/virt-manager/
+      echo ">> Starting the virt-manager GUI"
+      sudo su $USER -c virt-manager &> /dev/null
   fi
 
   # Start the virt-manager GUI if it is not running already  
@@ -117,6 +120,30 @@ start_iso_vm () {
   fi
 
   ls /var/lib/libvirt/images/$TMPNAME.img &> /dev/null && sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img > /dev/null
+
+
+  ## This is to fix some bug with generating the default pool the first time
+  TOTALVMS=$(virsh -q list --all) 
+  TOTPOOLS=$(virsh -q pool-list)
+  FILESINVAR=$(sudo ls /var/lib/libvirt/images)
+   
+  if [ "$TOTALPOOLS" == "" ]; then
+     if [ "$TOTALVMS" == "" ]; then
+          if [ "$FILESINVAR" == "" ]; then
+            echo ">> There are no virsh pools, no VMs and image dir is emty."
+            echo ">> Removing /var/lib/libvirt/images/ directory."
+            sudo rm -rf /var/lib/libvirt/images 
+          else
+            print "\033[0;31m** ERROR: there are no pools defined, but there are still files on /var/lib/libvirt/images/ directory, so we cannot remove it\n\033[0m" && exit
+          fi
+     fi
+  else
+     printf "\033[0;31m** ERROR: there are no pools defined, but there are still VMs, so I won't delete the directory /var/lib/libvirt/images/\n\033[0m" && exit
+  fi
+
+
+
+
 
   echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
   qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 ${DS}G 

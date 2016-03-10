@@ -160,7 +160,7 @@ else
 fi
 
 run_or_exit "virsh list | grep $VM_NAME"
-echo "BOMSI finished successfully"
+printf "\033[0;32m   BOMSI started successfully the VM $VM_NAME   :) \n\033[0m"
 
 
 
