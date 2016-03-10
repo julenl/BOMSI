@@ -156,10 +156,10 @@ else
   run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
   echo ">> Starting VM with the ISO" 
   . $THISD/lib/start_iso_vm 
-  start_iso_vm 
+	  start_iso_vm 
 fi
 
-run_or_exit "virsh list | grep $VM_NAME"
+run_or_exit "sudo su $USER -c 'virsh list' | grep $VM_NAME"
 printf "\033[0;32m   BOMSI started successfully the VM $VM_NAME   :) \n\033[0m"
 
 
