@@ -73,9 +73,13 @@ start_iso_vm () {
    then 
       echo ">> Installing all the virt-manager GUI"
       $PKG_CMD virt-manager >> /tmp/installed_by_bomsi.log
-      printf "\033[0;31mWARNING: The virt-manager GUI might not work properly until you reboot the system. Reboot or execute this same command again.\033[0m\n"
-     exit
+      printf "\033[0;31mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
+      echo "As a workaround we'll exectute: su - $USER"
+      sudo su - $USER
   fi
+
+  # Start the virt-manager GUI if it is not running already  
+  ps -aef |grep $USER |grep virt-manager > /dev/null || virt-manager &
 
 
   gen_vnet management ${IPPR_A}1
@@ -120,9 +124,9 @@ start_iso_vm () {
   echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
   
     echo ">> Using command:"
-    echo """virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME """ 
+    echo """sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME --force""" 
 
- sudo  virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME
+ sudo  virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME --force
 
 }
 

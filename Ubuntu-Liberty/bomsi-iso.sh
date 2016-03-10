@@ -15,7 +15,9 @@ export BOMSI_ISO_OPSYS="Ubuntu"
 ## 
 ##
 
-echo "### Starting BOMSI ###"
+echo " "
+printf "  \033[0;34m### Starting BOMSI ###\n\033[0m"
+echo " "
 
 export THISD=${PWD}
 echo ">> Loading bomsi variables from $THISD/lib/bomsi_vars"
@@ -77,14 +79,14 @@ elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
 fi
 
 ## Make sure all the packages are installed 
-sudo -n ls >/dev/null || \
-echo '>> Root password is required installing the packages'
+sudo -n ls &>/dev/null || \
+printf '\033[0;37m>> Root password is required installing the packages\n\033[0m'
 
 $PKG_UPDATE &> /dev/null
 for PKG in $PKGS
   do
     if ! pkg_installed $PKG &> /dev/null; then
-      echo ">>> Installing $PKG"
+      echo ">>>> Installing $PKG"
       $PKG_CMD $PKG &> /tmp/bomsi_install.log
     #else
     #  echo "   $PKG is already installed"
@@ -151,17 +153,13 @@ fi
 if [ -z ${INSTALL_VM+x} ]; then 
   echo ">> Not starting VM."; 
 else
-  ## check if virsh works
-  #virsh list &> /dev/null || $PKG_CMD libvirt-bin
-  #run_or_exit "virsh list"
-  #run_or_exit "virt-install --version"
-  ## check if ISO file is present
   run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
   echo ">> Starting VM with the ISO" 
   . $THISD/lib/start_iso_vm 
   start_iso_vm 
 fi
 
+run_or_exit "virsh list | grep $VM_NAME"
 echo "BOMSI finished successfully"
 
 
