@@ -76,7 +76,7 @@ start_iso_vm () {
       printf "\033[0;33mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
       echo "As a workaround we'll exectute 'su - $USER' and try the bomsi command again"
       ## for some reason this directory has sometimes wrong permissions
-      [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || sudo chown -R $USER ~/.cache/virt-manager/
+      [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || sudo chown -R $USER ~/.cache/virt-manager/ &> /dev/null
       echo ">> Starting the virt-manager GUI"
       sudo su $USER -c virt-manager &> /dev/null
   fi
