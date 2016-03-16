@@ -14,6 +14,8 @@ bomsi-iso version $BOMSI_ISO_VERSION for OpenStack release $BOMSI_ISO_RELEASE.
 --virt_nic_man=\"network=management\"
                               The name of the management network (or bridge) for VMs (i.e. \"bridge=br0\")
 -v, --version                 Print version and exit
+-V, --verbose                 Toggle verbose mode
+-Q, --quiet                   Toggle quiet mode (no output)
 -h, --help                    Print this help and exit
 
 Default configurations are provided for any name (-n) containing controller, compute1, compute2, compute3, network, block, object or clean. Clean kickstarts a clean CentOS machine, i.e. for dowloading the packages with gather_packages for a full off-line installation.
@@ -81,6 +83,15 @@ do
       -v|--version)
         echo "$BASH_ARGV version $VERSION"
         exit
+      ;;
+      -V|--verbose)
+        export SILENCER=''
+        shift # next value in @
+      ;;
+      -Q|--quiet)
+        export MUTE=' '
+        export SILENCER=' &> /dev/null '
+        shift # next value in @
       ;;
       -h|--help|*)
         echo "$HELP_TEXT"

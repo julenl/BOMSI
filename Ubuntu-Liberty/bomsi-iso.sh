@@ -15,17 +15,29 @@ export BOMSI_ISO_OPSYS="Ubuntu"
 ## 
 ##
 
-echo " "
-printf "  \033[0;34m### Starting BOMSI ###\n\033[0m"
-echo " "
-
 export THISD=${PWD}
-echo ">> Loading bomsi variables from $THISD/lib/bomsi_vars"
-[ -f $THISD/lib/bomsi_vars ] && . $THISD/lib/bomsi_vars
+
+##By default output of commands will be removed
+export SILENCER=' &> /dev/null'
+
+export MUTE=''
 
 ## Parse command line options
 CMDL_VARS="$@"
 source get_args.sh
+
+
+## If -Q is used this script will return nothing
+if [ -n "$MUTE" ]; then
+  exec &>-
+fi
+
+echo " "
+printf "  \033[0;34m### Starting BOMSI ###\n\033[0m"
+echo " "
+
+echo ">> Loading bomsi variables from $THISD/lib/bomsi_vars"
+[ -f $THISD/lib/bomsi_vars ] && . $THISD/lib/bomsi_vars
 
 
 
@@ -82,21 +94,20 @@ fi
 sudo -n ls &>/dev/null || \
 printf '\033[0;37m>> Root password is required installing the packages\n\033[0m'
 
-$PKG_UPDATE &> /dev/null
+eval $PKG_UPDATE $SILENCER
 for PKG in $PKGS
   do
     if ! pkg_installed $PKG &> /dev/null; then
-      echo ">>>> Installing $PKG"
+      eval echo ">>>> Installing $PKG" $SILENCER
       $PKG_CMD $PKG &> /tmp/bomsi_install.log
-    #else
-    #  echo "   $PKG is already installed"
+    else
+      eval echo "   $PKG is already installed" $SILENCER
     fi
   done
 
  [ -z "$POST_PKGS" ] || \
 echo ">> Starting and enabling libvirtd (if necessary)" && \
-echo $POST_PKGS && \
- eval "$POST_PKGS" # This enables libvirtd
+ eval "$POST_PKGS" $SILENCER # This enables libvirtd
 
 
 
@@ -105,8 +116,8 @@ echo $POST_PKGS && \
 ## If the original ISO is not present, download it into the $PATH_TO_ISO directory
 if [ ! -f $PATH_TO_ISO ]; then
   echo ">> Downloading ISO to: $PATH_TO_ISO"
-  mkdir -p ${PATH_TO_ISO%/*} > /dev/null 
-  curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/15.10/ubuntu-15.10-server-amd64.iso
+  mkdir -p ${PATH_TO_ISO%/*}
+  eval curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/15.10/ubuntu-15.10-server-amd64.iso $SILENCER
   #curl -o $PATH_TO_ISO http://de.releases.ubuntu.com/14.04.4/ubuntu-14.04.3-server-amd64.iso
 fi
 
@@ -120,7 +131,6 @@ iso_kickstart
 
 echo ">> The ISO file has been generated"
 
-
 ## The ISO is already created. Now, if $USB_DEV was defined it will install the ISO on that device
 ## if the $INSTALL_VM variable was defined at some point, it will load and run the start_iso_vm,
 ## which installs the ISO file into a Virtual Machine with virsh
@@ -132,16 +142,16 @@ if [ ! -z ${USB_DEV+x} ]; then
   ## check if device is present
   run_or_exit "sudo fdisk -l |grep $USB_DEV"
   echo ">> clean the content of the pendrive"
-  sudo dd if=/dev/zero of=$USB_DEV bs=512 count=1
+  eval sudo dd if=/dev/zero of=$USB_DEV bs=512 count=1 $SILENCER
   #echo -e "o\nn\np\n1\n\n\na\n1\nw" | sudo fdisk $USB_DEV
   echo " "
   echo ">> COPY THE ISO FILE TO THE PENDRIVE IN $USB_DEV "
   echo " "
   ## check if ISO file is present
   run_or_exit "[ -f $PATH_TO_ISO/$OUT_ISO_NAME ]"
-  sudo dd if=$OUT_ISO_DIR/$OUT_ISO_NAME of=$USB_DEV bs=512 
+  eval sudo dd if=$OUT_ISO_DIR/$OUT_ISO_NAME of=$USB_DEV bs=512 $SILENCER
   echo ">> Testing USB device"
-  sudo qemu-system-x86_64 -enable-kvm -m 1024 -hda $USB_DEV
+  eval sudo qemu-system-x86_64 -enable-kvm -m 1024 -hda $USB_DEV $SILENCER
   unset INSTALL_VM
 fi
 
@@ -151,16 +161,15 @@ fi
 ## Load the ISO into a Virtual Machine with qemu
 
 if [ -z ${INSTALL_VM+x} ]; then 
-  echo ">> Not starting VM."; 
+  echo ">> Not starting VM."
 else
   run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
-  echo ">> Starting VM with the ISO" 
+  echo ">> Starting VM with the ISO"
   . $THISD/lib/start_iso_vm 
 	  start_iso_vm 
 fi
 
 run_or_exit "sudo su $USER -c 'virsh list' | grep $VM_NAME"
-printf "\033[0;32m   BOMSI started successfully the VM $VM_NAME   :) \n\033[0m"
-
+printf "\033[0;32m   BOMSI started successfully the VM $VM_NAME   :) \n\033[0m" 
 
 

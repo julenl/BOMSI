@@ -37,9 +37,9 @@ cat > /tmp/xmlnetfile << EOF
 EOF
 
 #virsh net-create /tmp/xmlnetfile #dissapears after reboot
-sudo virsh net-define /tmp/xmlnetfile > /dev/null
-sudo virsh net-start $1 > /dev/null
-sudo virsh net-autostart $1 > /dev/null
+eval sudo virsh net-define /tmp/xmlnetfile $SILENCER
+eval sudo virsh net-start $1 $SILENCER
+eval sudo virsh net-autostart $1 $SILENCER
 fi
 }
 
@@ -47,7 +47,7 @@ fi
 start_iso_vm () {
   echo " "
   echo "------------------------"
-  echo ">> Starting VM with qemu" 
+  echo ">> Starting VM with qemu"
   echo "------------------------"
   #set -e
   #set -x
@@ -55,7 +55,7 @@ start_iso_vm () {
   ## Make sure that the current user can use virsh properly
 
   ## Usage: add_user_to_group USER GROUP
-  add_user_to_group () { getent group $1 |grep $2 || sudo usermod -a -G $2 $1 > /dev/null; }
+  add_user_to_group () { getent group $1 |grep $2 || eval sudo usermod -a -G $2 $1 $SILENCER; }
   
   for GROUP_I in $KVM_GROUPS; do 
     add_user_to_group $USER $GROUP_I
@@ -64,7 +64,7 @@ start_iso_vm () {
    
 
   ## Check that the virsh commands work
-  virsh list &> /dev/null || $PKG_CMD libvirt-bin &> /dev/null
+  virsh list &> /dev/null || eval $PKG_CMD libvirt-bin $SILENCER
   run_or_exit "sudo virsh list"
   run_or_exit "sudo virt-install --version"
 
@@ -72,17 +72,17 @@ start_iso_vm () {
   if [[ ! $( which virt-manager) ]]
    then 
       echo ">> Installing all the virt-manager GUI"
-      $PKG_CMD virt-manager >> /tmp/installed_by_bomsi.log
+      eval $PKG_CMD virt-manager $SILENCER
       printf "\033[0;33mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
       echo "As a workaround we'll exectute 'su - $USER' and try the bomsi command again"
       ## for some reason this directory has sometimes wrong permissions
-      [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || sudo chown -R $USER ~/.cache/virt-manager/ &> /dev/null
+      [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || eval sudo chown -R $USER ~/.cache/virt-manager/ $SILENCER
       echo ">> Starting the virt-manager GUI"
-      sudo su $USER -c virt-manager &> /dev/null
+      eval sudo su $USER -c virt-manager $SILENCER
   fi
 
   # Start the virt-manager GUI if it is not running already  
-  ps -aef |grep $USER |grep virt-manager > /dev/null || virt-manager &> /dev/null &
+  ps -aef |grep $USER |grep virt-manager > /dev/null || eval virt-manager $SILENCER &
 
 
   gen_vnet management ${IPPR_A}1
@@ -94,32 +94,32 @@ start_iso_vm () {
   if [ -z ${VM_NAME+x} ]; then # If VM name was not set... 
     TMPNAME="Ubuntu_OS-test"
   else 
-    echo "The virtual machine (domain) will be called '$VM_NAME'"
+    echo ">> The virtual machine (domain) will be called '$VM_NAME'"
     TMPNAME=$VM_NAME
   fi 
 
   if [ -z $VIRT_NIC_MAN ]; then VIRT_NIC_MAN="network=management"; fi
   
   ## Make sure the user has permission to create VMs
-  sudo chmod 777 /var/lib/libvirt/images/  > /dev/null 
+  eval sudo chmod 777 /var/lib/libvirt/images/ $SILENCER
  
   ## Stop an old VM with the same name
   vm_status=$(sudo virsh list |grep $TMPNAME|awk '{print $3}')
   if [ "$vm_status" == "running" ]; then
-    sudo virsh destroy $TMPNAME &> /dev/null && echo "VM " $TMPNAME " Down"
+    eval sudo virsh destroy $TMPNAME $SILENCER && echo "VM " $TMPNAME " Down"
   fi
 
   ## Delete an old VM with the same name
   vm_status=$(sudo virsh list --all |grep $TMPNAME|awk '{print $3}')
   #echo "$(sudo virsh list |grep $TMPNAME)"
   if [ "$vm_status" == "shut" ]; then
-    echo ">> Remove $TMPNAME and delete the associated virtual disk(s)"
-    sudo virsh undefine $TMPNAME &> /dev/null
-    sudo virsh vol-delete --pool default $TMPNAME.img &> /dev/null && echo "VM " $TMPNAME " succesfully removed"
+    echo ">> Remove $TMPNAME and delete the associated virtual disk(s)" $MUTE
+    eval sudo virsh undefine $TMPNAME $SILENCER
+    eval sudo virsh vol-delete --pool default $TMPNAME.img $SILENCER && echo "VM " $TMPNAME " succesfully removed"
     ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
   fi
 
-  ls /var/lib/libvirt/images/$TMPNAME.img &> /dev/null && sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img > /dev/null
+  eval ls /var/lib/libvirt/images/$TMPNAME.img $SILENCER && eval sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img $SILENCER
 
 
   ## This is to fix some bug with generating the default pool the first time
@@ -132,7 +132,7 @@ start_iso_vm () {
           if [ "$FILESINVAR" == "" ]; then
             echo ">> There are no virsh pools, no VMs and image dir is emty."
             echo ">> Removing /var/lib/libvirt/images/ directory."
-            sudo rm -rf /var/lib/libvirt/images 
+            eval sudo rm -rf /var/lib/libvirt/images $SILENCER
           else
             printf "\033[0;31m** ERROR: there are no pools defined, but there are still files on /var/lib/libvirt/images/ directory, so we cannot remove it\n\033[0m" && exit
           fi
@@ -144,14 +144,14 @@ start_iso_vm () {
 
 
   echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
-  qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 ${DS}G > /dev/null
+  eval qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 ${DS}G $SILENCER
 
   echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
   
     echo ">> Using command:"
-    printf """\033[0;34m sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME --force \n\033[0m""" 
+    printf """\033[0;34m eval sudo virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME --force $SILENCER \n\033[0m"""
 
- sudo  virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME --force &> /dev/null
+ eval sudo  virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/$OUT_ISO_NAME --force $SILENCER
 
 }
 

@@ -1,0 +1,28 @@
+ 
+  [0;34m### Starting BOMSI ###
+[0m 
+>> Loading bomsi variables from /home/user/BOMSI/Ubuntu-Liberty/lib/bomsi_vars
+>> Customizing the ISO file
+>> Copying the contents of the iso file in /tmp/mountiso/ into /tmp/custom_iso/custom_iso/files/
+>> Generating kickstart file at  /tmp/custom_iso/files/ks/ks-controller.cfg
+>> Generating kickstart file at  /tmp/custom_iso/files/ks/ks-compute1.cfg
+>> Generating kickstart file at  /tmp/custom_iso/files/ks/ks-compute2.cfg
+>> Generating kickstart file at  /tmp/custom_iso/files/ks/ks-compute3.cfg
+>> Compiling ISO file at: ~/BOMSI-controler.iso
+>> Changing owner and privileges of the ISO file (default owner is libvirt-qemu)
+>> Checking ISO file with dumpet
+>> The ISO file has been generated
+>> Starting VM with the ISO
+ 
+------------------------
+>> Starting VM with qemu
+------------------------
+>> The virtual machine (domain) will be called 'controler'
+VM  controler  Down
+>> Remove controler and delete the associated virtual disk(s)
+>> Creating an emty file as a virtual disk as controler.img with 5 Gb size
+>> Starting a Virtual Machine using the ISO /home/user/BOMSI-controler.iso
+>> Using command:
+[0;34m eval sudo virt-install -n controler --cpu host --vcpus 2 -r 4092 --os-type=linux --disk /var/lib/libvirt/images/controler.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network network=management,model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole -c ~/BOMSI-controler.iso --force  &> /dev/null  
+[0m[0;32m   BOMSI started successfully the VM controler   :) 
+[0m
