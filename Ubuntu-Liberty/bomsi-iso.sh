@@ -98,7 +98,7 @@ eval $PKG_UPDATE $SILENCER
 for PKG in $PKGS
   do
     if ! pkg_installed $PKG &> /dev/null; then
-      eval echo ">>>> Installing $PKG" $SILENCER
+      echo ">>>> Installing $PKG"
       $PKG_CMD $PKG &> /tmp/bomsi_install.log
     else
       eval echo "   $PKG is already installed" $SILENCER
