@@ -18,6 +18,21 @@ EOF
 }
 
 
+rm_check () {
+# Usage: rm_check /PATH/TO/FILE/OR/DIR
+# Removes only if it is safe to remove
+ FILEORDIR=$1
+ if [[ $FILEORDIR == "/tmp/custom_iso" ]] || \
+    [[ $FILEORDIR == "/tmp/"*"/"* ]] || \
+    [[ $FILEORDIR == "/home/$USER/"*"/"* ]] ; then
+      sudo rm -rf $FILEORDIR
+ else
+      echo "ERROR: Unable to remove '$FILEORDIR' safely"
+      echo "Try 'sudo rm -rf $FILEORDIR' if you are sure of what you are doing."
+      exit
+ fi
+}
+
 
 
 
@@ -28,7 +43,8 @@ iso_kickstart () {
   df -h |grep /dev/loop0 &> /dev/null && sudo umount /dev/loop0
   df -h |grep /dev/loop1 &> /dev/null && sudo umount /dev/loop1
   df -h |grep /dev/loop2 &> /dev/null && sudo umount /dev/loop2
-  sudo rm -rf $OUT_DIR/ 
+
+  rm_check $OUT_DIR/ 
 
 
 

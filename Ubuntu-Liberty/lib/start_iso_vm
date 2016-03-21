@@ -119,7 +119,7 @@ start_iso_vm () {
     ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
   fi
 
-  eval ls /var/lib/libvirt/images/$TMPNAME.img $SILENCER && eval sudo rm -rf /var/lib/libvirt/images/$TMPNAME.img $SILENCER
+  eval ls /var/lib/libvirt/images/$TMPNAME.img $SILENCER && eval sudo rm -f /var/lib/libvirt/images/$TMPNAME.img $SILENCER
 
 
   ## This is to fix some bug with generating the default pool the first time
