@@ -81,9 +81,9 @@ start_iso_vm () {
       eval sudo su $USER -c virt-manager $SILENCER
   fi
 
-  # Start the virt-manager GUI if it is not running already  
-  ps -aef |grep $USER |grep virt-manager > /dev/null || eval virt-manager $SILENCER &
-
+  # Pop-up the virt-manager GUI if we are running with X environment  
+  [[ $TERM == *"xterm"* ]] && eval virt-manager $SILENCER 
+  
 
   gen_vnet management ${IPPR_A}1
   gen_vnet ext-net ${IPPR_EXT}1
