@@ -88,14 +88,10 @@ skipx
 #reboot
 
 %packages
-
-# Since I don't install recommended it leaves out some things that should
-# probably be installed like openssl and python 2.7
 openssl
 python
 wget
 tcpd
-# End all the recommended packages that are still useful
 openssh-server
 curl
 screen

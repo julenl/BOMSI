@@ -41,8 +41,6 @@ eval export $1
 }
 ### VARIABLES
 export USE_VMS="KVM"  #"KVM" for virsh and "NO" in case the machines are already up
-#export VM_TEMPLATE_NAME="MiniCentOS7p"
-#export VM_PREF="OS-t2"
 ## Network Interfaces (VLANS like eth0.1 or eth0:2 also supported)
 export IFACE0=eth0
 #export IFACE1=eth1
@@ -89,7 +87,7 @@ export CONTROLLER_IP=${IP_controller}
 #export COMPUTE_STOIPS=$IPPR_S$COMPUTE_LN
 export NEUTRON_LN=21
 export NEUTRON_NODE_IP=$IPPR_A$NEUTRON_LN
-export NEUTRON_NODE_TUNIP=$IPPR_T$NEUTRON_LN #Tunnel network
+#export NEUTRON_NODE_TUNIP=$IPPR_T$NEUTRON_LN #Tunnel network
 export CINDER_LN=41
 #export BLOCK_IPS=$IPPR_A$CINDER_LN
 #export BLOCK_STOIPS=$IPPR_S$CINDER_LN #Storage Network
