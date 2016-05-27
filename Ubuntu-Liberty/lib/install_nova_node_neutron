@@ -40,15 +40,15 @@ install_nova_node_neutron () {
 
 
   TMPF="/etc/nova/nova.conf"
-  susti $TMPF neutron "neutronurl = http://controller:9696"
-  susti $TMPF neutron "neutronauth_url = http://controller:35357"
-  susti $TMPF neutron "neutronauth_plugin = password"
-  susti $TMPF neutron "neutronproject_domain_id = default"
-  susti $TMPF neutron "neutronuser_domain_id = default"
-  susti $TMPF neutron "neutronregion_name = RegionOne"
-  susti $TMPF neutron "neutronproject_name = service"
-  susti $TMPF neutron "neutronusername = neutron"
-  susti $TMPF neutron "neutronpassword = ${NEUTRON_PASSWORD}"
+  susti $TMPF neutron "url = http://controller:9696"
+  susti $TMPF neutron "auth_url = http://controller:35357"
+  susti $TMPF neutron "auth_plugin = password"
+  susti $TMPF neutron "project_domain_id = default"
+  susti $TMPF neutron "user_domain_id = default"
+  susti $TMPF neutron "region_name = RegionOne"
+  susti $TMPF neutron "project_name = service"
+  susti $TMPF neutron "username = neutron"
+  susti $TMPF neutron "password = ${NEUTRON_PASSWORD}"
 
   service nova-compute restart
   service neutron-plugin-linuxbridge-agent restart
