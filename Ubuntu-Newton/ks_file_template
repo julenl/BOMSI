@@ -262,11 +262,7 @@ EOF
         echo "\$\$" > /root/${HOST_NAME}-init.d.pid  #PID of this init.d script
         echo \`date +%Y-%m-%d:%H:%M:%S\` 'Starting init.d script' |tee -a /tmp/BOMSI_STEP.log 
 
-    #echo $PATHVAR >/root/path
-    #echo '$PATHVAR' >/root/path
     export PATH=$PATHVAR:/usr/local/sbin:/usr/local/bin/:/root/bomsi/lib
-    #echo $PATHVAR >/root/path
-    #echo '$PATHVAR' >>/root/path
 
     . /root/bomsi/lib/t_vars
     load_bomsi_functions
@@ -289,7 +285,6 @@ EOF
 
 EOF
 
-   #sed -i 's/PATHVAR/\$PATH/' /root/bomsi_install_script.sh
    chmod +x /root/bomsi_install_script.sh
 
 
