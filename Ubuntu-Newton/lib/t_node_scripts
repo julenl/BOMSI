@@ -1,0 +1,160 @@
+#! /bin/bash
+
+setup_controller () {
+
+  . /root/bomsi/lib/t_vars
+  load_bomsi_functions
+    
+    log_step 'Executing setup_controller function'
+    log_step '.> Executing basic_packages'
+  basic_packages
+    log_step '.> Executing mysqld_rabbitmq'
+  mysqld_rabbitmq &> /tmp/setup_controller_mysql_rabbit.log
+    log_step '.> Executing install_keystone'
+  install_keystone &>  /tmp/setup_controller_keystone.log
+    log_step '.> Executing install_glance'
+  install_glance &>  /tmp/setup_controller_glance.log
+   log_step '.> Executing install_nova_controller'
+  install_nova_controller &>  /tmp/setup_controller_nova_controller.log
+    log_step '.> Executing install_neutron_controller'
+  install_neutron_controller &>  /tmp/setup_controller_neutron_controller.log
+    log_step '.> Executing install_horizon'
+  install_horizon &>  /tmp/setup_controller_horizon.log
+#    log_step '.> Executing install_heat'
+#  install_heat &>  /tmp/setup_controller_heat.log
+# #run_heat_stack &>  /tmp/setup_controller_heat_stack.log
+
+  #The next part is released as a child script
+  # and executed when the first nova node shows up
+    log_step '.> Generating script to wait for compute1 and execute the rest'
+  cat >/tmp/controller_finish_compute.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars 
+  . /root/bomsi/lib/t_check_compute 
+  . /root/admin-openrc.sh
+  log_step 'Creating /tmp/controller_finish_compute.sh '
+  while ! nova service-list |grep nova-compute 
+    do
+      sleep 10 && log_step '.   > waiting for compute1 node'
+    done
+
+  check_compute |tee -a  /tmp/setup_controller.log
+  log_step 'Compute service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_compute.sh'
+  chmod +x /tmp/controller_finish_compute.sh
+  nohup /tmp/controller_finish_compute.sh &
+
+  # The next child script is executed when ovs at neutron nodecomes up
+  cat >/tmp/controller_finish_network.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars
+  . /root/bomsi/lib/t_create_neutron_networks
+  . /root/admin-openrc.sh
+  log_step 'Creating /tmp/controller_finish_neutron.sh '
+  while ! neutron agent-list |grep compute1
+    do
+      sleep 10 && log_step '.   > waiting for neutron setup to finish' 
+    done
+
+  create_neutron_networks |tee -a  /tmp/setup_controller.log
+  log_step 'Network service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_network.sh'
+  chmod +x /tmp/controller_finish_network.sh
+  nohup /tmp/controller_finish_network.sh &
+      
+
+  #This will send create and execute a heat template once everything else is up
+  cat >/tmp/controller_finish_heat.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars 
+  load_bomsi_functions
+  . /root/admin-openrc.sh
+
+  log_step 'Creating /tmp/controller_finish_heat.sh '
+  while ! neutron agent-list |grep compute1 
+    do
+      sleep 10 && log_step '.   > waiting for neutron setup to finish for heat'
+    done
+  while ! nova service-list |grep nova-compute 
+    do
+      sleep 10 && log_step '.   > waiting for compute1 node for heat' 
+    done
+
+  sleep 10
+  run_heat_stack > /tmp/heat_stack.log
+
+  log_step 'Orchestation (heat) service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_heat.sh'
+  chmod +x /tmp/controller_finish_heat.sh
+  #nohup /tmp/controller_finish_heat.sh &
+  
+}
+
+
+
+
+setup_compute () {
+  ## This function requires one argument, the index of the compute node
+  ## Usage (for the first compute node): setup_compute_node "1"
+
+  . /root/bomsi/lib/t_vars
+  load_bomsi_functions
+
+    log_step 'Executing setup_compute function'
+    log_step ' > Executing basic_packages'
+  basic_packages
+
+  log_step ' > basic_packages executed, waiting for MySQL in controller' 
+  which nmap || apt-get -y install nmap 
+  while ! nmap -p 3306 controller |grep mysql |grep open; do sleep 2 && log_step '.   > waiting for MySQL in controller' ; done
+  log_step '. > MySQL ready on controller, installing nova-compute'
+
+  install_nova_node &> /tmp/setup_compute.log
+    log_step '. > Nova_node installed'
+ 
+  install_nova_node_neutron &> /tmp/setup_compute_neu.log
+    log_step '. > nova_node_neutron installed' 
+
+  #The next part is released as a child script
+  # and executed when the port 8774 (nova-api) opens up in controller
+    log_step '.> Generating script to wait for nova in controller'
+  cat >/tmp/controller_finish_compute-node.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars 
+  load_bomsi_functions 
+  
+  log_step 'Creating /tmp/controller_finish_compute.sh '
+  # Wait for the controller to expose the nova-api service
+  which nmap || apt-get -y install nmap 
+  while ! nmap controller -p 8774 |grep 8774 |grep open 
+    do
+      sleep 5 && log_step '.   > waiting for nova in controller'
+    done
+
+  sleep 10
+  # Restart the compute service
+  service nova-compute restart
+
+  log_step 'Compute service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_compute-node.sh'
+  chmod +x /tmp/controller_finish_compute-node.sh
+  nohup /tmp/controller_finish_compute-node.sh &
+
+}
+
+setup_compute1 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; }
+setup_compute2 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; }
+setup_compute3 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; }
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,308 @@
+preseed preseed/file=/cdrom/preseed/ubuntu-server-minimalvm.seed
+preseed preseed/file=/cdrom/preseed/lubuntu.seed
+
+## INSTALLER SECTIONS
+
+## Choose language
+lang en_US
+# System language
+d-i debian-installer/locale string en_US
+# Avoid warning about install CD not containing full support for language
+d-i pkgsel/install-language-support boolean false
+
+
+## ACCESS SOFTWARE FOR A BLIND PERSON USING A BRAILLE DISPLAY
+
+
+## CONFIGURE KEYBOARD
+d-i keyboard-configuration/layoutcode string us
+d-i console-setup/ask_detect boolean false
+
+
+## DETECT AND MOUNT CD-ROM
+
+
+## LOAD debconf PRECONFIGURATION FILE
+
+
+## DETECT VIRTUAL DRIVER DISKS FROM HARDWARE MANUFACTURER
+
+
+## LOAD INSTALLER COMPONENTS FROM CD
+
+
+## DETECT NETWORK HARDWARE
+
+
+## CONFIGURE THE NETWORK
+
+d-i netcfg/get_hostname string osbash
+d-i netcfg/get_domain string unassigned-domain
+### Clock and time zone setup
+# Controls whether or not the hardware clock is set to UTC.
+d-i clock-setup/utc boolean true
+d-i time/zone string Etc/UTC
+
+
+
+
+#d-i netcfg/choose_interface select auto
+#d-i netcfg/dhcp_failed note
+#d-i netcfg/dhcp_options select Configure network manually
+
+#d-i netcfg/choose_interface select $IFACE0
+#d-i netcfg/disable_autoconfig boolean true
+#d-i netcfg/get_ipaddress string $IP
+#d-i netcfg/get_netmask string $NETMASK
+#d-i netcfg/get_gateway string $GATEWAY
+#d-i netcfg/get_nameservers string $NAMESERVER
+#d-i netcfg/confirm_static boolean true
+
+# The above does not really work, so...
+network --bootproto=static --device=auto  --ip=$IP --netmask=$NETMASK --gateway=$GATEWAY --nameserver=$NAMESERVER --activate --hostname=$HOST_NAME
+
+# Choices: archive.ubuntu.com
+choose-mirror-bin	mirror/http/mirror	select	archive.ubuntu.com
+# Set the clock using NTP?
+clock-setup	clock-setup/ntp	boolean	true
+
+
+## DETECT DISKS
+
+d-i partman-auto/disk string /dev/sda
+
+## PARTITION DISKS
+partman-base	partman/unmount_active	boolean	true
+clearpart --all --initlabel
+
+# The presently available methods are:
+# - regular: use the usual partition types for your architecture
+# - lvm:     use LVM to partition the disk
+# - crypto:  use LVM within an encrypted partition
+d-i partman-auto/method string regular
+
+# You can choose one of the three predefined partitioning recipes:
+# - atomic: all files in one partition
+# - home:   separate /home partition
+# - multi:  separate /home, /usr, /var, and /tmp partitions
+d-i partman-auto/choose_recipe select atomic
+
+
+#Basic disk partition
+# without these 3 lines there is a confirmation prompt
+part / --fstype ext4 --size 1 --grow --asprimary 
+part swap --size 1024 
+part /boot --fstype ext4 --size 256 --asprimary 
+
+# This makes partman automatically partition without confirmation, provided
+# that you told it what to do using one of the methods above.
+d-i partman/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+d-i partman-lvm/confirm_nooverwrite boolean true
+
+
+## INSTALL THE SYSTEM
+# Initial user (will have sudo so no need for root)
+#d-i passwd/user-fullname string BOMSI user
+#d-i passwd/username string user
+#d-i passwd/user-password password AC0mP13xP4s5word
+#d-i passwd/user-password-again password AC0mP13xP4s5word
+#d-i user-setup/allow-password-weak boolean true
+#d-i user-setup/encrypt-home boolean false
+#-------------------------------------------------------------------------------
+
+preseed user-setup/allow-password-weak boolean true
+# The above still asks for the full user name
+user user --fullname "BOMSI User" --password $ROOT_PASSWORD
+# Root password
+rootpw --password $ROOT_PASSWORD
+
+
+
+
+## CONFIGURE THE PACKAGE MANAGER
+
+
+## SELECT AND INSTALL SOFTWARE
+
+
+## INSTALL THE GRUB BOOT LOADER ON A HARD DISK
+# This is fairly safe to set, it makes grub install automatically to the MBR
+# if no other operating system is detected on the machine.
+#d-i grub-installer/only_debian boolean true
+
+
+## CONTINUE WITHOUT BOOT LOADER
+
+
+## FINISH THE INSTALLATION
+# Avoid reboot confirmation
+#d-i finish-install/reboot_in_progress true
+# The above does not work, using the ks command
+reboot
+
+d-i cdrom-detect/eject boolean true
+
+
+
+
+
+
+
+
+
+
+%packages
+
+# Since I don't install recommended it leaves out some things that should
+# probably be installed like openssl and python 2.7
+openssl
+python
+wget
+tcpd
+openssh-server
+curl
+screen
+man
+vim
+
+
+%post
+
+# Clean up
+apt-get -qq -y autoremove
+apt-get clean
+rm -f /var/cache/apt/*cache.bin
+rm -f /var/lib/apt/lists/*
+
+## Set the user and root passwords to the value of ROOT_PASSWORD
+#echo "user:$ROOT_PASSWORD"|chpasswd
+#echo "root:$ROOT_PASSWORD"|chpasswd
+
+# Allow ssh from root
+sed -i 's/PermitRootLogin .*/PermitRootLogin/'
+
+# Add the BOMSI dir to the PATH
+echo 'PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/bin:/root/bomsi/lib"' > /etc/environment
+echo $DIFF_LOCAL_LOCALES > /root/local_locales
+
+
+# Make sure that the network interfaces have the good old ethX name
+# instead of the fancy and tricky to handdle "ensX"...
+sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"/' /etc/default/grub
+grub-mkconfig -o /boot/grub/grub.cfg
+
+
+# Generate the init script that triggers the install script
+  cat > /etc/init.d/firstrun_${HOST_NAME} << EOF
+#!/bin/bash
+#
+# Calling BOMSI for ${HOST_NAME} node
+# 
+# Provides:          bomsi
+# Required-Start:    $local_fs $network
+# Required-Stop:     $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: dovecot
+# 
+# chkconfig: 345 90 10
+# description: Calling BOMSI for ${HOST_NAME} 
+
+case "\$1" in
+    start)
+        nohup /root/bomsi_install_script.sh &> /tmp/bomsi_nohup.log &
+#       /bin/bash
+#       echo "\$\$" > /root/${HOST_NAME}-init.d.pid  #PID of this init.d script
+#       echo \`date +%Y-%m-%d:%H:%M:%S\` 'Starting init.d script' |tee -a /tmp/BOMSI_STEP.log 
+
+#   #source /root/bomsi/lib/l_vars
+#   . /root/bomsi/lib/t_vars
+#   load_bomsi_functions
+#   #source /root/bomsi/lib/t_basic_net_setup
+#   #source /root/bomsi/lib/t_node_scripts
+
+
+#    #export PATH="\\\$PATH:/root/bomsi/lib/"
+
+#    #Make sure internet is working
+#    N=1
+#    while ! ping -s1 -c1 8.8.8.8; do sleep 1 && N=[$N+1] && echo $N `date` > ~/wait.log ; done
+#    log_step 'Internet seems to work, adding repos'
+
+#    basic_net_setup $IFACE0 $IFACE_EXT $IP
+#    log_step "The network was configured with IP: $IP"
+
+#    # List of different locales on your local machine    
+#    #DIFF_LOCAL_LOCALES="$DIFF_LOCAL_LOCALES"
+#
+#    # POST_SCRIPT
+#    $POST_SCRIPT
+#    log_step 'POST_SCRIPT finished'
+#         
+#    touch ~/HOST_COMPLETED-${HOST_NAME}
+#    chmod 600 /etc/init.d/firstrun_${HOST_NAME}
+#    mv /etc/init.d/firstrun_${HOST_NAME} /root/
+     ;;
+     stop|status|restart|reload|force-reload)
+      # do nothing
+     ;;
+  esac
+EOF
+
+   chmod +x /etc/init.d/firstrun_$HOST_NAME 
+   update-rc.d firstrun_$HOST_NAME defaults
+
+
+# Generate the actual install script
+  cat > /root/bomsi_install_script.sh << EOF
+#! /bin/bash
+        echo "\$\$" > /root/${HOST_NAME}-init.d.pid  #PID of this init.d script
+        echo \`date +%Y-%m-%d:%H:%M:%S\` 'Starting init.d script' |tee -a /tmp/BOMSI_STEP.log 
+
+    #echo $PATHVAR >/root/path
+    #echo '$PATHVAR' >/root/path
+    export PATH=$PATHVAR:/usr/local/sbin:/usr/local/bin/:/root/bomsi/lib
+    #echo $PATHVAR >/root/path
+    #echo '$PATHVAR' >>/root/path
+
+    . /root/bomsi/lib/t_vars
+    load_bomsi_functions
+
+     #Make sure internet is working
+     N=1
+     while ! ping -s1 -c1 8.8.8.8; do sleep 1 && N=[$N+1] && echo $N `date` > ~/wait.log ; done
+     log_step 'Internet seems to work, adding repos'
+
+     basic_net_setup $IFACE0 $IFACE_EXT $IP
+     log_step "The network was configured with IP: $IP"
+
+     # POST_SCRIPT
+     $POST_SCRIPT
+     log_step 'POST_SCRIPT finished'
+          
+     touch ~/HOST_COMPLETED-${HOST_NAME}
+     chmod 600 /etc/init.d/firstrun_${HOST_NAME}
+     mv /etc/init.d/firstrun_${HOST_NAME} /root/
+
+EOF
+
+   #sed -i 's/PATHVAR/\$PATH/' /root/bomsi_install_script.sh
+   chmod +x /root/bomsi_install_script.sh
+
+
+
+
+%post --nochroot
+
+# Copy the BOMSI scripts into /root/bomsi
+cp -r /target/media/cdrom/bomsi /target/root/
+chmod -R u+w /target/root/bomsi/
+chmod +x /target/root/bomsi/lib/susti
+cp /target/media/cdrom/bomsi/hosts /target/etc/hosts 
+
+
+
+

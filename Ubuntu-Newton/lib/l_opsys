@@ -1,0 +1,67 @@
+#! /usr/bin/env bash
+
+## This file tries to guess whether we are running on a Suse, CentOS or Debian/Ubuntu
+## based machine (mostly tested with Ubuntu). If some dependency is missing, it will
+## update the package database and install the missing package(s)
+
+OP_SYS=$(awk '{print $1}' /etc/issue |head -1)
+if [ "$OP_SYS" == "Welcome" ] # That's (open)SUSE
+  then
+    PKG_CMD="sudo zypper -n install "
+    PKG_UPDATE="sudo zypper -n update"
+    PKGS="curl gettext-runtime mkisofs qemu-kvm libvirt virt-install libvirt-client bridge-utils acpid libvirt-python qemu "
+    pkg_check () { rpm -q $1 ; }
+    #PKG_CHECK="rpm -q "
+    POST_PKGS='sudo systemctl status libvirtd > /dev/null || sudo systemctl enable libvirtd.service && sudo systemctl start libvirtd.service'
+    KVM_GROUPS="libvirt kvm"
+
+elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
+  then
+    PKG_CMD="sudo apt-get -y install "
+    install_pkg () {
+        eval "sudo apt-get -y install $1" $SILENCER
+        }
+
+    update_pkg_cache () {
+      ## If the cache is older than 100 minutes, update it
+      STAP_FILE="/var/lib/apt/periodic/update-success-stamp"
+      if [ "$[$(date +%s) - $(stat -c %Z $STAMP_FILE)]" -ge 6000000 ]; then
+         eval "sudo apt-get -y update" $SILENCER
+      fi
+      }
+
+    pkg_installed () { dpkg -l $1 |grep "ii"; }
+    #PKG_CHECK="dpkg -l "
+    PKGS="curl gettext genisoimage dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system " # virt-manager ubuntu-vm-builder 
+    KVM_GROUPS="libvirtd kvm"
+
+elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
+  then
+    PKG_CMD="sudo yum -y install "
+fi
+
+## Prompt message if sudo rights are needed
+check_root () {
+    sudo -n ls &>/dev/null || \
+    printf '\033[0;37m>> Root privileges (sudo) is required\n\033[0m'
+    }
+
+## Make sure all the packages are installed
+#eval $PKG_UPDATE $SILENCER
+for PKG in $PKGS
+  do
+    if ! pkg_installed $PKG &> /dev/null; then
+      echo ">>>> Installing $PKG"
+      check_root
+      update_pkg_cache
+      install_pkg $PKG &> /tmp/bomsi_install.log
+    else
+      eval echo "   $PKG is already installed" $SILENCER
+    fi
+  done
+
+ [ -z "$POST_PKGS" ] || \
+echo ">> Starting and enabling libvirtd (if necessary)" && \
+ eval "$POST_PKGS" $SILENCER # This enables libvirtd
+
+

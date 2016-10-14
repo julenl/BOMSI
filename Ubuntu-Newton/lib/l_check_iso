@@ -1,0 +1,67 @@
+#! /bin/bash
+
+## If the original Operative System image is not in the ~/ISOS folder
+## or the checksums don't match, download it
+## Usage: func_bomsi_check_iso
+
+check_iso () {
+  [ "$BASE_ISO_NAME" == "" ] && BASE_ISO_NAME=ubuntu-15.10-server-amd64.iso
+
+  if [[ $BASE_ISO_NAME == "ubuntu"* ]]
+    then
+      OP_VERSION=$(echo $BASE_ISO_NAME |awk -F"-" '{print $2}')
+      URL="http://releases.ubuntu.com"
+  else
+      echo "ERROR: You have to enter a URL to download $1"
+      OP_VERSION=""
+      URL=""
+      exit
+  fi
+
+
+  [ -z $ISO_DIR_PATH ] && ISO_DIR_PATH=~/ISOS
+  [ ! -d $ISO_DIR_PATH ] && mkdir -p $ISO_DIR_PATH
+
+
+  get_iso () {
+  if [ ! -f ${ISO_DIR_PATH}/${BASE_ISO_NAME} ]
+    then
+      echo ">> No ISO found. Downloading ISO to: ${ISO_DIR_PATH}/${BASE_ISO_NAME}"
+      curl -s -o ${ISO_DIR_PATH}/${BASE_ISO_NAME} ${URL}/${OP_VERSION}/${BASE_ISO_NAME}
+  fi
+  }
+
+  get_checksum () {
+  if [ ! -f ${ISO_DIR_PATH}/Ubuntu_${OP_VERSION}_MD5SUMS ]
+    then
+      echo ">> No MD5SUMS found. Downloading file to: ${ISO_DIR_PATH}/Ubuntu_${OP_VERSION}_MD5SUMS"
+      curl -s -o ${ISO_DIR_PATH}/Ubuntu_${OP_VERSION}_MD5SUMS \
+                 ${URL}/${OP_VERSION}/MD5SUMS
+  fi
+  }
+
+  get_iso
+  get_checksum
+
+  MD5SUM=$(cat ${ISO_DIR_PATH}/Ubuntu_${OP_VERSION}_MD5SUMS |grep ${BASE_ISO_NAME} |awk '{print $1}')
+
+  [ "$MD5SUM" == "" ] && echo "ERROR: probably MDSUMS file is wrong" 
+
+  md5sum ${ISO_DIR_PATH}/${BASE_ISO_NAME} |grep -q $MD5SUM || get_iso
+
+  [ "$?" == "0" ] && echo "   > The $BASE_ISO_NAME file is good"
+
+  get_cirros_iso () {
+      if [ ! -f ${ISO_DIR_PATH}/${CIRROS_IMG} ]
+        then
+          echo ">> No ISO found. Downloading ISO to: ${ISO_DIR}/${ISO_NAME}"
+          CIRROS_VERSION=$(echo $CIRROS_IMG | awk -F"-" '{print $2}')
+          curl -s -o ${ISO_DIR_PATH}/$CIRROS_IMG http://download.cirros-cloud.net/${CIRROS_VERSION}/${CIRROS_IMG}
+      fi
+  }
+  get_cirros_iso
+
+}
+
+  
+

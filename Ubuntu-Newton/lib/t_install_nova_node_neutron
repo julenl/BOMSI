@@ -1,0 +1,69 @@
+#! /bin/bash
+
+install_nova_node_neutron () {
+
+ . /root/bomsi/lib/t_vars
+ load_bomsi_functions
+   
+  log_step ".  > Installing neutron node"
+
+  # Install packages
+  apt-get -y install neutron-plugin-linuxbridge-agent 
+  #conntrack
+
+  
+   ## This part here is exactly the same as in the controller
+  TMPF="/etc/neutron/neutron.conf"
+
+  susti $TMPF DEFAULT "rpc_backend = rabbit"
+  susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+  susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+  susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+
+  susti $TMPF DEFAULT "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "memcached_servers = controller:11211"
+  susti $TMPF keystone_authtoken "auth_type = password"
+  susti $TMPF keystone_authtoken "project_domain_name = default"
+  susti $TMPF keystone_authtoken "user_domain_name = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = neutron"
+  susti $TMPF keystone_authtoken "password = $NEUTRON_PASSWORD"
+
+  #susti $TMPF DEFAULT "core_plugin = ml2"
+  #susti $TMPF DEFAULT "service_plugins = router"
+  #susti $TMPF DEFAULT "allow_overlapping_ips = True"
+  #susti $TMPF DEFAULT "verbose = True"
+
+  # We don't need this line
+  sed -i 's/identity_uri.*//' $TMPF
+
+
+  if [ "$NET_OPT" == "PROVIDER" ]; then
+      install_nova_node_neutron_provider
+  else
+      install_nova_node_neutron_self-serv
+  fi
+
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF neutron "url = http://controller:9696"
+  susti $TMPF neutron "auth_url = http://controller:35357"
+  susti $TMPF neutron "auth_type = password"
+  susti $TMPF neutron "project_domain_name = default"
+  susti $TMPF neutron "user_domain_name = default"
+  susti $TMPF neutron "region_name = RegionOne"
+  susti $TMPF neutron "project_name = service"
+  susti $TMPF neutron "username = neutron"
+  susti $TMPF neutron "password = ${NEUTRON_PASSWORD}"
+
+  service nova-compute restart
+  service neutron-linuxbridge-agent restart
+
+  # Run this again, otherwise it doesn't work for some reason
+  sleep 5
+  service nova-compute restart
+}
+
+
+

@@ -1,0 +1,15 @@
+#! /bin/bash
+
+create_sql_user () {
+ 
+. /root/bomsi/lib/t_vars
+
+   mysql -u root -p$MYSQL_ROOT <<-EOF
+CREATE DATABASE $1;
+GRANT ALL PRIVILEGES ON $1.* TO '$1'@'localhost' \
+  IDENTIFIED BY '$2';
+GRANT ALL PRIVILEGES ON $1.* TO '$1'@'%' \
+  IDENTIFIED BY '$2';
+EOF
+}
+

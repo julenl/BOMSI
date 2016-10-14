@@ -1,0 +1,157 @@
+#! /bin/bash
+
+create_neutron_networks () {
+
+ . /root/bomsi/lib/t_vars
+ . ~/admin-openrc.sh
+
+  #echo "### This should show 5 entries"
+  #neutron agent-list
+
+  
+    log_step ".  > Creating provider virtual network"
+
+    neutron net-create --shared --provider:physical_network provider \
+     --provider:network_type flat provider
+
+
+    export DNS_RESOLVER="8.8.4.4"
+
+    export PROVIDER_NETWORK_CIDR='203.0.113.0/24' #Network
+    export START_IP_ADDRESS='203.0.113.100'  #1st IP in range
+    export END_IP_ADDRESS='203.0.113.200'  #last IP
+    export PROVIDER_NETWORK_GATEWAY='203.0.113.1'  #Gateway
+
+    sleep 1
+
+    neutron subnet-create --name provider \
+    --allocation-pool start=$START_IP_ADDRESS,end=$END_IP_ADDRESS \
+    --dns-nameserver $DNS_RESOLVER --gateway $PROVIDER_NETWORK_GATEWAY \
+    provider $PROVIDER_NETWORK_CIDR
+
+
+  if [ "$NET_OPT" == "PROVIDER" ]; then
+    true
+  else
+
+    log_step ".  > Creating self-service virtual network"
+
+    sleep 1
+    . ~/demo-openrc.sh
+    neutron net-create selfservice      
+
+    export SELFSERVICE_NETWORK_CIDR=${IPPR_EXT}0/24 #Network
+    export START_IP_ADDRESS=$IPPR_EXT'101'  #1st IP in range
+    export END_IP_ADDRESS=$IPPR_EXT'200'  #last IP
+    export SELFSERVICE_NETWORK_GATEWAY=${IPPR_EXT}1 
+
+    sleep 1
+    neutron subnet-create --name selfservice \
+    --dns-nameserver $DNS_RESOLVER --gateway $SELFSERVICE_NETWORK_GATEWAY \
+    selfservice $SELFSERVICE_NETWORK_CIDR
+
+    . ~/admin-openrc.sh
+    neutron net-update selfservice --router:external
+    
+    . ~/demo-openrc.sh
+    neutron router-create router
+    neutron router-interface-add router selfservice
+    #. ~/demo-openrc.sh
+    #neutron router-gateway-set router public
+    neutron router-gateway-set router selfservice
+    . ~/admin-openrc.sh
+
+  fi
+
+## Delete everything
+# neutron router-gateway-clear router ; neutron router-interface-delete router selfservice ; neutron router-delete router ; neutron net-delete provider ; neutron net-delete selfservice
+
+
+# neutron router-gateway-clear router && neutron router-interface-delete router private && neutron router-delete router && neutron net-delete private && neutron net-delete public
+
+
+
+  
+
+  #neutron net-update provider --router:external
+
+
+
+
+#  neutron net-create public --shared --provider:physical_network public \
+#  --provider:network_type flat
+
+
+
+ #export PUBLIC_NETWORK_CIDR='203.0.113.0/24' #Network
+ #export START_IP_ADDRESS='203.0.113.100'  #1st IP in range
+ #export END_IP_ADDRESS='203.0.113.200'  #last IP
+ #export DNS_RESOLVER='8.8.4.4'
+ #export PUBLIC_NETWORK_GATEWAY='203.0.113.1'  #Gateway
+
+
+# neutron subnet-create public $PUBLIC_NETWORK_CIDR --name public \
+#   --allocation-pool start=$START_IP_ADDRESS,end=$END_IP_ADDRESS\
+#   --dns-nameserver $DNS_RESOLVER --gateway $PUBLIC_NETWORK_GATEWAY
+
+
+# neutron net-create private
+
+# export PRIVATE_NETWORK_CIDR='172.16.1.0/24'
+# export PRIVATE_NETWORK_GATEWAY='172.16.1.1'
+
+
+# neutron subnet-create private $PRIVATE_NETWORK_CIDR --name private \
+# --dns-nameserver $DNS_RESOLVER --gateway $PRIVATE_NETWORK_GATEWAY
+
+
+# 
+# neutron net-update public --router:external
+
+
+
+ #Delete those networks and routers
+# neutron router-gateway-clear router && neutron router-interface-delete router private && neutron router-delete router && neutron net-delete private && neutron net-delete public
+
+
+ #ifconfig $IFACE0 promisc
+
+ #print_title "Testing Neutron Networkin"
+
+ sleep 3 ## Give some time to finish creating the routers
+
+ echo "Check that l3-agent created the networks properly"
+ QROUTER=$(ip netns | grep qrouter- |awk '{print $1}')
+ ip netns exec $QROUTER ip addr list
+ echo "Ping Gateway of the external network"
+ ip netns exec $QROUTER ping -c3 $START_IP_ADDRESS
+
+ neutron port-list
+ #neutron port-show #ID
+
+ QROUTER=$(ip netns | grep qrouter- |awk '{print $1}')
+ ip netns exec $QROUTER ip a
+
+ for IDHCP in $(ip netns | grep qdhcp- |awk '{print $1}')
+  do 
+    ip netns exec $IDHCP ip a
+    echo "  "
+  done
+
+
+ #To delete them
+ #dhcp_delete_namespaces
+ #dhcp_delete_namespaces
+
+
+ # To launch an instance
+ #NET_ID=$(neutron net-list |grep selfservice |awk '{print $2}')
+
+ #openstack server create --flavor m1.tiny --image cirros  --nic net-id=$NET_ID --security-group default --key-name mykey selfservice-instance 
+
+ # The old way
+ #nova boot --flavor m1.nano --image cirros --nic net-id=$NET_ID --security-group default --key-name mykey private-instance
+
+}
+
+

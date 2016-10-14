@@ -1,0 +1,27 @@
+#! /usr/bin/env bash
+
+export THISD=${PWD}
+
+## Parse command line options and set verbosity
+CMDL_VARS="$@"
+source lib/l_get_args
+
+## Try to detect Operative System (Linux) type of current machine
+echo " >> Trying to detect local operative system and resolving dependencies"
+source lib/l_opsys
+
+echo " >> Setting undefined local variables"
+source lib/l_vars
+
+
+echo " >> Checking the existence and integrity of the original ISO file"
+source lib/l_check_iso
+check_iso
+
+source lib/l_gen_iso
+gen_iso
+
+source lib/l_iso2pen
+
+source lib/l_iso2vm
+

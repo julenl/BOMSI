@@ -1,0 +1,100 @@
+#! /bin/bash
+
+install_glance (){
+
+ . /root/bomsi/lib/t_vars
+ . /root/bomsi/lib/create_sql_user
+ load_bomsi_functions
+ 
+  log_step ".  > Installing and configuring glance"
+
+ . ~/admin-openrc.sh
+
+
+ log_step ".  > Creating MySQL user glance"
+  ## Create the MySQL/MariaDB user for glance
+  create_sql_user glance $GLANCE_DB_PASSWORD
+
+ ## Create the keystone user, role and endpoint for glance
+
+  log_step ".  > Creating keystone user glance"
+  openstack user create --domain default --password $GLANCE_PASSWORD --email glance@os.mydomain.com glance
+  
+  log_step ".  > Giving user glance the admin role "
+  openstack role add --project service --user glance admin
+
+  log_step ".  > Creating the glance service"
+  openstack service create --name glance \
+  --description "OpenStack Image" image
+
+  log_step ".  > Creating the glance service endpoints"
+  openstack endpoint create --region RegionOne \
+    image public http://controller:9292
+  openstack endpoint create --region RegionOne \
+    image internal http://controller:9292
+  openstack endpoint create --region RegionOne \
+    image admin http://controller:9292
+
+
+  ## Install the packages for glance
+  apt-get -y install glance 
+
+  TMPF="/etc/glance/glance-api.conf"
+     susti $TMPF glance_store "stores = file,http"
+     susti $TMPF glance_store "default_store = file"
+     susti $TMPF glance_store "filesystem_store_datadir = /var/lib/glance/images/"
+
+
+  for TMPF in /etc/glance/glance-api.conf /etc/glance/glance-registry.conf
+   do
+     susti $TMPF database   "connection = mysql+pymysql://glance:${GLANCE_DB_PASSWORD}@controller/glance"
+     susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+     susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+     #susti $TMPF keystone_authtoken "auth_plugin = password"
+     susti $TMPF keystone_authtoken "auth_type = password"
+     susti $TMPF keystone_authtoken "project_domain_id = default"
+     susti $TMPF keystone_authtoken "user_domain_id = default"
+     susti $TMPF keystone_authtoken "project_name = service"
+     susti $TMPF keystone_authtoken "username = glance"
+     susti $TMPF keystone_authtoken "password = $GLANCE_PASSWORD"
+     susti $TMPF paste_deploy "flavor = keystone"
+    
+     #susti $TMPF DEFAULT "notification_driver = noop"
+     #susti $TMPF DEFAULT "verbose = True" 
+   done
+
+  su -s /bin/sh -c "glance-manage db_sync" glance
+
+  # Finalizes instalation
+  service glance-api restart
+  service glance-registry restart
+
+  # Remove the default SQLite database, which we are not going to use
+  #rm -f /var/lib/glance/glance.sqlite
+
+  # Test glance
+
+  ## if file is available localy just copy it instead of download
+  if [ ! -f /root/LocalRepo/Packages/keystone.py ]; then
+#     log_step "cirros copied, not downloaded" 
+#     cp /root/bomsi/LocalRepo/cirros-0.3.4-x86_64-disk.img /tmp/images/ 
+#  else
+#     #yum -y install wget
+#    #wget http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk.img
+     . /root/bomsi/lib/l_vars
+     CIRROS_VERSION=$(echo $CIRROS_IMG | awk -F"-" '{print $2}')
+     curl -s -o /root/bomsi/LocalRepo/$CIRROS_IMG http://download.cirros-cloud.net/${CIRROS_VERSION}/${CIRROS_IMG}
+  fi
+
+  source ~/admin-openrc.sh
+
+  glance image-create --name "cirros" \
+  --file /root/bomsi/LocalRepo/cirros-0.3.4-x86_64-disk.img \
+  --disk-format qcow2 --container-format bare \
+  --visibility public --progress  
+
+  glance image-list
+
+}
+
+

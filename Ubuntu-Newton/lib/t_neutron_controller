@@ -1,0 +1,86 @@
+#! /bin/bash
+
+install_neutron_controller () {
+
+ . /root/bomsi/lib/t_vars
+ load_bomsi_functions
+ . ~/admin-openrc.sh
+
+  log_step ". > Installing neutron in controller"
+
+  create_sql_user neutron $NEUTRON_DB_PASSWORD
+
+  log_step ".   > Creating keystone user for neuron"
+  openstack user create --domain default --password $NEUTRON_PASSWORD --email neutron@os.mydomain.com neutron
+  log_step ".   > Adding admin role to neuron user"
+  openstack role add --project service --user neutron admin
+
+  log_step ".   > Creating network service"
+  openstack service create --name neutron \
+  --description "OpenStack Networking" network
+  
+  log_step ".   > Creating API endpoints"
+  openstack endpoint create --region RegionOne \
+   network public   http://controller:9696
+  openstack endpoint create --region RegionOne \
+   network internal http://controller:9696
+  openstack endpoint create --region RegionOne \
+   network admin    http://controller:9696
+
+
+  if [ "$NET_OPT" == "PROVIDER" ]; then
+      install_neutron_controller_provider
+  else
+      install_neutron_controller_self-serv 
+  fi
+
+
+
+  TMPF="/etc/neutron/metadata_agent.ini"
+  #susti $TMPF DEFAULT "auth_url = http://controller:5000"
+  #susti $TMPF DEFAULT "auth_url = http://controller:35357"
+  #susti $TMPF DEFAULT "auth_region = RegionOne"
+  #susti $TMPF DEFAULT "auth_plugin = password"
+  #susti $TMPF DEFAULT "project_domain_id = default"
+  #susti $TMPF DEFAULT "user_domain_id = default"
+  #susti $TMPF DEFAULT "project_name = service"
+  #susti $TMPF DEFAULT "username = neutron"
+  #susti $TMPF DEFAULT "password = $NEUTRON_PASSWORD"
+  susti $TMPF DEFAULT "nova_metadata_ip = controller"
+  susti $TMPF DEFAULT "metadata_proxy_shared_secret = $METADATA_SECRET"
+  #susti $TMPF DEFAULT "verbose = True"
+
+
+  TMPF="/etc/nova/nova.conf"
+  susti $TMPF neutron "url = http://controller:9696"
+  susti $TMPF neutron "auth_url = http://controller:35357"
+  susti $TMPF neutron "auth_type = password"
+  susti $TMPF neutron "project_domain_name = default"
+  susti $TMPF neutron "user_domain_name = default"
+  susti $TMPF neutron "region_name = RegionOne"
+  susti $TMPF neutron "project_name = service"
+  susti $TMPF neutron "username = neutron"
+  susti $TMPF neutron "password = $NEUTRON_PASSWORD"
+  susti $TMPF neutron  "service_metadata_proxy = True"
+  susti $TMPF neutron  "metadata_proxy_shared_secret = $METADATA_SECRET"
+
+  # Populate the database
+  su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf \
+  --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+
+  # Restart the services
+  service nova-api restart
+  service neutron-server restart
+  service neutron-plugin-linuxbridge-agent restart
+  service neutron-dhcp-agent restart
+  service neutron-metadata-agent restart
+
+  service neutron-l3-agent restart
+
+  # Remove the SQLite database
+  rm -f /var/lib/neutron/neutron.sqlite
+
+
+}
+
+

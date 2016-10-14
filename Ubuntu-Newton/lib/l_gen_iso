@@ -1,0 +1,178 @@
+#! /bin/bash
+
+ksf_menu_add () {
+  ## Add entries to boot menu file
+  ## Usage: ksf_menu_add LABEL TITLE KS_FILE
+  
+  TMPF="$OUT_DIR/files/isolinux/txt.cfg"
+  sed -i '/default .*/d' $TMPF
+  TMP_TMPF=$(cat $TMPF) # This contains the old config
+  rm $TMPF
+  cat > $TMPF <<EOF
+label $1
+  menu label $2
+  kernel /install/vmlinuz
+  append  file=/cdrom/preseed/ubuntu-server.seed vga=788 initrd=/install/initrd.gz ks=cdrom:/ks/ks-${1}.cfg net.ifnames=0 ---
+EOF
+  echo "$TMP_TMPF" >> $TMPF
+}
+
+
+rm_check () {
+# Usage: rm_check /PATH/TO/FILE/OR/DIR
+# Removes only if it is safe to remove
+ FILEORDIR=$1
+ if [[ $FILEORDIR == "/tmp/custom_iso" ]] || \
+    [[ $FILEORDIR == "/tmp/"*"/"* ]] || \
+    [[ $FILEORDIR == "/home/$USER/"*"/"* ]] ; then
+      sudo rm -rf $FILEORDIR
+ else
+      echo "ERROR: Unable to remove '$FILEORDIR' safely"
+      echo "Try 'sudo rm -rf $FILEORDIR' if you are sure of what you are doing."
+      exit
+ fi
+}
+
+
+diff_locales (){
+    DIFF_LOCAL_LOCALES=""
+    for LOCAL_LOCALE in `locale`
+        do
+            LOC=$(echo $LOCAL_LOCALE | awk -F= '{print $2}' |tr -d '":')
+            if [[ "$DIFF_LOCAL_LOCALES" != *"$LOC"* ]]; then
+                DIFF_LOCAL_LOCALES="$DIFF_LOCAL_LOCALES $LOC"
+            fi
+	done
+     DIFF_LOCAL_LOCALES=$(echo $DIFF_LOCAL_LOCALES |sed 's/^ //')
+     echo "$DIFF_LOCAL_LOCALES"
+    }
+
+export DIFF_LOCAL_LOCALES=$(diff_locales)
+echo "    > Passing these locales to the new machines: $DIFF_LOCAL_LOCALES"
+#if ! grep -q  "$DIFF_LOCAL_LOCALES" lib/t_vars ; then
+#    echo "export DIFF_LOCAL_LOCALES=$DIFF_LOCAL_LOCALES" >> lib/t_vars
+#fi
+
+gen_iso () {
+  ## Recompile the ISO file with customized menus and scripts
+
+  source lib/t_vars # load the variables for target machine
+
+  ## Make sure we do not have anything mounted already
+  ls /tmp/mountiso/isolinux &> /dev/null && fusermount -u /tmp/mountiso
+
+  echo " >> Mount the ISO file in /tmp/mountiso"
+  mkdir -p /tmp/mountiso/
+  fuseiso $PATH_TO_ISO /tmp/mountiso/
+  rm -rf $OUT_DIR/
+  
+  ## Generate the directories for the custom scripts
+  mkdir -p $OUT_DIR/files/{ks,bomsi}
+  #eval sudo chown -R $USER $OUT_DIR/ $SILENCER
+   
+
+  echo " >> Copying the contents of the iso file in /tmp/mountiso/ into $OUT_DIR/custom_iso/files/"
+  eval rsync -a /tmp/mountiso/ $OUT_DIR/files/ $SILENCER
+
+  chmod -R u+w /tmp/custom_iso
+  echo en > $OUT_DIR/files/isolinux/lang
+
+  ## Copy this directory to the /root/bomsi directory in the new server
+  cp -r * $OUT_DIR/files/bomsi
+
+  mkdir -p $OUT_DIR/files/bomsi/LocalRepo/
+  [ -f ${ISO_DIR_PATH}/${CIRROS_IMG} ] && \
+  cp ${ISO_DIR_PATH}/${CIRROS_IMG} $OUT_DIR/files/bomsi/LocalRepo/
+
+  KS_MENU_ARR=(controller compute1 compute2 compute3) # network block object)
+  KS_INDEX=1
+  ## Add options to kickstart menu
+  ## Read the node list in reverse order, so that controller is the first opt
+  for ((i=${#KS_MENU_ARR[@]}-1; i>=0; i--)); do
+    OPT_MENU="${KS_MENU_ARR[$i]}"
+    ksf_menu_add $OPT_MENU "^$KS_INDEX Kickstart $OPT_MENU"
+    KS_INDEX=$((KS_INDEX+1)) 
+  done
+
+
+  ## Try to set boot menu to auto select the right option
+  for OPT_MENU in "${KS_MENU_ARR[@]}"
+    do
+      if [[ $VM_NAME == *"$OPT_MENU"* ]]; then
+        echo " >> The '$OPT_MENU' node will be set as default on the installer menu" $MUTE 
+        DEF_KICKSTART=${OPT_MENU}
+        KS_SET="YES"
+      fi
+    done
+
+  ## If the VM name does not include a "node name" install a clean machine
+  [ -z ${DEF_KICKSTART+x} ] && DEF_KICKSTART="controller"
+
+  ## Set the default boot option
+  TMPF="$OUT_DIR/files/isolinux/txt.cfg"
+  TMP_TMPF=$(cat $TMPF)
+  rm $TMPF
+  echo "default $DEF_KICKSTART" >> $TMPF
+  echo "$TMP_TMPF" >> $TMPF
+
+
+  ## Set a faster timeout for the boot menu (time x10 in seconds)
+  sed -i "s/timeout .*/timeout $BOOT_TIMEOUT/" $OUT_DIR/files/isolinux/isolinux.cfg 
+
+
+  ## Generate kickstart files for each node from template
+  run_or_exit "envsubst --version"
+  
+  for HOST in "${KS_MENU_ARR[@]}"
+   do 
+     ## Set content of post-install
+     echo "   > Generating kickstart file at " $OUT_DIR/files/ks/ks-${HOST}.cfg
+     export IP=$(eval 'echo $IP_'${HOST}) #IP for current server
+     # echo " > machine: ${HOST} => IP= ${IP}"
+
+     if [ "$IP" ]; then # If the IP is not empty
+       export POST_SCRIPT="""
+       log_step 'Running the setup_$HOST script'
+      setup_$HOST 
+      """
+     else  # If the IP was not defined, install a basic system
+       export IP=$IPPR_A"254"
+       export POST_SCRIPT="log_step 'BOMSI will not be installed.'"
+     fi
+
+     export HOST_NAME=${HOST}
+     # This is a hack to avoid expanding the PATH variable on the ks file
+     export PATHVAR='$PATH'
+     envsubst < ./ks_file_template > $OUT_DIR/files/ks/ks-${HOST}.cfg
+
+  done
+
+
+cat > $OUT_DIR/files/bomsi/hosts << EOF
+$IP_controller controller
+$IP_compute1 compute1  
+$IP_compute2 compute2  
+$IP_compute3 compute3  
+${IPPR_A}$NEUTRON_LN network   
+${IPPR_A}$CINDER_LN block     
+EOF
+
+
+  run_or_exit "mkisofs -version"
+
+
+  echo " >> Compiling ISO file at: $OUT_ISO_DIR/$OUT_ISO_NAME"
+  eval mkisofs -D -r -V "BOMSI_INSTALLER" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o $OUT_ISO_DIR/$OUT_ISO_NAME $OUT_DIR/files/ $SILENCER
+
+  which dumpet &>/dev/null && \
+  echo " >> Checking ISO file with dumpet" &&\
+  run_or_exit "eval dumpet -i $OUT_ISO_DIR/$OUT_ISO_NAME $SILENCER"
+
+  echo " >> The ISO file has been generated"
+  printf "\033[0;32m   BOMSI created successfully the ISO file $OUT_ISO_DIR/$OUT_ISO_NAME   :) \n\033[0m"
+  echo " "
+}
+
+
+
+

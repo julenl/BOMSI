@@ -1,0 +1,30 @@
+#! /bin/bash
+
+check_compute () {
+  . ~/admin-openrc.sh
+  
+ echo "### This should show 4 services in the controller and 1 in the compute, all up"
+ nova service-list
+
+ echo "### This should show 9 boxes"
+ nova endpoints
+
+ echo "### This should show the cirros image"
+ nova image-list
+
+
+ openstack flavor create --id 0 --vcpus 1 --ram 64 --disk 1 m1.nano
+
+ ssh-keygen -f ~/.ssh/id_rsa -N ''
+ #nova keypair create --public-key ~/.ssh/id_rsa.pub mykey
+ openstack keypair create --public-key ~/.ssh/id_rsa.pub mykey
+ #nova keypair-list
+ openstack keypair list
+
+ openstack security group rule create --proto icmp default
+ openstack security group rule create --proto tcp --dst-port 22 default
+
+
+}
+
+
