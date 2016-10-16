@@ -80,6 +80,8 @@ install_neutron_controller_self-serv () {
   susti $TMPF DEFAULT "dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq"
   susti $TMPF DEFAULT "enable_isolated_metadata = True"
   #susti $TMPF DEFAULT "verbose = True"
+
+  # Next line is not in the guide, but it is in training-labs
   #susti $TMPF DEFAULT "dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf"
   
   #echo "dhcp-option-force=26,1450" > /etc/neutron/dnsmasq-neutron.conf

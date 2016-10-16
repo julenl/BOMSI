@@ -143,7 +143,7 @@ gen_iso () {
      export HOST_NAME=${HOST}
      # This is a hack to avoid expanding the PATH variable on the ks file
      export PATHVAR='$PATH'
-     envsubst < ./ks_file_template > $OUT_DIR/files/ks/ks-${HOST}.cfg
+     envsubst < $THISD/lib/ks_template > $OUT_DIR/files/ks/ks-${HOST}.cfg
 
   done
 

@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/env bash
 
 gen_vnet () {
   ## Creates a virtual network if not already present, and if subnet not already in use

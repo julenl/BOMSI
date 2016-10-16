@@ -137,7 +137,8 @@ os_test_controller () {
 
 
  echo "### Neutron controller"
- cmdt_sctl_err neutron-server
+ cmdt_sctl_err neutron-server neutron-linuxbridge-agent neutron-dhcp-agent \
+               neutron-metadata-agent neutron-l3-agent
 
  
  echo "### Neutron node in controller?"
@@ -147,7 +148,7 @@ os_test_controller () {
    echo "### NEUTRON NODE IN CONTROLLER"
    echo "###"
 
-   cmdt_sctl_err neutron-dhcp-agent neutron-l3-agent neutron-metadata-agent neutron-plugin-linuxbridge-agent 
+   cmdt_sctl_err neutron-dhcp-agent neutron-l3-agent neutron-metadata-agent neutron-linuxbridge-agent 
  
 
   brctl show && \

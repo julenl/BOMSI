@@ -9,4 +9,17 @@ while building the ISO images or virtual environment.
 - The files starting with "t_" are meant to be executed on the target machines,
 or the ones that are going to be running the actual OpenStack installation.
 
+- ks_template is a kickstart/preseed file template for installing the operative system
+  of the OpenStack servers. Carefull! It is not meant to use as it is, it is a template
+  and contains variables which are parsed by l_gen_iso to generate the real files.
+
+- ini_comparer.py is a usefull script to compare two local or remote .ini configuration
+  files
+
+- susti is a python script for editing .ini config files.
+  Usage: susti CONFIG_FILE SECTION "KEYWORD = VALUE"
+
+- os_test_ubuntu is a library of functions to check if everything is working properly
+  without having to type in all the "service XXX status" and "openstack XXX list"
+  commands.
 

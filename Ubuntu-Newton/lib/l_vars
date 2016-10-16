@@ -16,7 +16,7 @@ set_if_unset () {
 ## DEFAULTS
 
 ## For building the ISO
-set_if_unset BOOT_TIMEOUT 10
+set_if_unset BOOT_TIMEOUT 100 # timeout for the boot menu tines 10
 set_if_unset OUT_DIR /tmp/custom_iso
 set_if_unset OUT_ISO_DIR "$HOME"
 set_if_unset OUT_ISO_NAME "BOMSI-Custom.iso"

@@ -56,8 +56,6 @@ EOF
   susti $TMPF api_database "connection = mysql+pymysql://nova:${NOVA_DB_PASSWORD}@controller/nova_api"
   susti $TMPF database "connection = mysql+pymysql://nova:${NOVA_DB_PASSWORD}@controller/nova"
 
-  ### This hack is because susti will comment the second "connection" key
-  #sed -i 's/###connection = mysql+pymysql.*nova_api/connection = mysql+pymysql:\/\/nova:Password@controller\/nova_api/' $TMPF
 
   susti $TMPF DEFAULT "rpc_backend = rabbit"
   susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
@@ -87,7 +85,10 @@ EOF
   susti $TMPF vnc "vncserver_listen = \$my_ip" 
   susti $TMPF vnc "vncserver_proxyclient_address = \$my_ip" 
   #susti $TMPF glance "host = controller"
-  susti $TMPF glance "host = http://controller:9292"
+
+  # I don't think we need this next line
+  #susti $TMPF glance "host = http://controller:9292"
+
   susti $TMPF oslo_concurrency "lock_path = /var/lib/nova/tmp" 
 
   #susti $TMPF DEFAULT "network_api_class = nova.network.neutronv2.api.API"
@@ -97,10 +98,22 @@ EOF
   #susti $TMPF DEFAULT "verbose = True"
 
   # Bugs in packaging
-  sed -i '/logdir/d' $TMPF
+  sed -i '/log-dir/d' $TMPF
   sed -i '/verbose.*=/d' $TMPF
-  sed -i '/api_paste_config/d' $TMPF
+  sed -i '/api_paste_config.*=/d' $TMPF
+  sed -i '/use_virtio_bridges.*=/d' $TMPF
   susti $TMPF wsgi "api_paste_config = /etc/nova/api-paste.ini"
+
+
+
+  # Stuff I learned from the config from Roger in training-labs
+  # which made this thing work!! :D
+  susti $TMPF DEFAULT "libvirt_use_virtio_for_bridges = True"
+  susti $TMPF DEFAULT "lock_path = /var/lock/nova"
+  susti $TMPF DEFAULT "api_paste_config = /etc/nova/api-paste.ini"
+  susti $TMPF glance "api_servers = http://controller:9292"
+
+
 
   # Populate the nova database
   log_step ".     > Populating nova and nova_api databases"

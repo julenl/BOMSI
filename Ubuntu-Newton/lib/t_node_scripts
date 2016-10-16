@@ -30,12 +30,12 @@ setup_controller () {
   cat >/tmp/controller_finish_compute.sh<<EOF 
 #! /bin/bash
   . /root/bomsi/lib/t_vars 
-  . /root/bomsi/lib/t_check_compute 
+  load_bomsi_functions 
   . /root/admin-openrc.sh
   log_step 'Creating /tmp/controller_finish_compute.sh '
   while ! nova service-list |grep nova-compute 
     do
-      sleep 10 && log_step '.   > waiting for compute1 node'
+      sleep 5 && log_step '.   > waiting for compute1 node'
     done
 
   check_compute |tee -a  /tmp/setup_controller.log
@@ -49,12 +49,12 @@ EOF
   cat >/tmp/controller_finish_network.sh<<EOF 
 #! /bin/bash
   . /root/bomsi/lib/t_vars
-  . /root/bomsi/lib/t_create_neutron_networks
+  load_bomsi_functions
   . /root/admin-openrc.sh
   log_step 'Creating /tmp/controller_finish_neutron.sh '
   while ! neutron agent-list |grep compute1
     do
-      sleep 10 && log_step '.   > waiting for neutron setup to finish' 
+      sleep 5 && log_step '.   > waiting for neutron setup to finish' 
     done
 
   create_neutron_networks |tee -a  /tmp/setup_controller.log
@@ -129,9 +129,18 @@ setup_compute () {
   log_step 'Creating /tmp/controller_finish_compute.sh '
   # Wait for the controller to expose the nova-api service
   which nmap || apt-get -y install nmap 
-  while ! nmap controller -p 8774 |grep 8774 |grep open 
+  #while ! nmap controller -p 8774 |grep 8774 |grep open
+
+  # If the neutron port is open, nova-api installation is finished 
+  while ! nmap controller -p 9696 |grep 9696 |grep open 
     do
-      sleep 5 && log_step '.   > waiting for nova in controller'
+      sleep 5 && log_step '.   > waiting for nova port (8775) in controller'
+    done
+
+  # Better wait until the controller replies properly
+  while ! curl -s controller:8774 |grep -q SUPPORTED
+    do
+      sleep 5 && log_step '.   > waiting for nova (controller) to reply'
     done
 
   sleep 10
