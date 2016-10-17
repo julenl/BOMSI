@@ -85,15 +85,6 @@ gen_iso () {
   cp ${ISO_DIR_PATH}/${CIRROS_IMG} $OUT_DIR/files/bomsi/LocalRepo/
 
   KS_MENU_ARR=(controller compute1 compute2 compute3) # network block object)
-  KS_INDEX=1
-  ## Add options to kickstart menu
-  ## Read the node list in reverse order, so that controller is the first opt
-  for ((i=${#KS_MENU_ARR[@]}-1; i>=0; i--)); do
-    OPT_MENU="${KS_MENU_ARR[$i]}"
-    ksf_menu_add $OPT_MENU "^$KS_INDEX Kickstart $OPT_MENU"
-    KS_INDEX=$((KS_INDEX+1)) 
-  done
-
 
   ## Try to set boot menu to auto select the right option
   for OPT_MENU in "${KS_MENU_ARR[@]}"
@@ -108,7 +99,32 @@ gen_iso () {
   ## If the VM name does not include a "node name" install a clean machine
   [ -z ${DEF_KICKSTART+x} ] && DEF_KICKSTART="controller"
 
+
+  ## The "default" option on the isolinux/txt.cfg file does not seem to work so
+  ## I'm going to rearrange the elements so that the default option is the first
+  ## one in the boot list
+  KS_MENU_ARR_ORD=()
+  KS_MENU_ARR_ORD+=($DEF_KICKSTART)
+  for OPT_MENU in "${KS_MENU_ARR[@]}"
+    do
+      if [[ "$DEF_KICKSTART" != *"$OPT_MENU"* ]]; then
+          KS_MENU_ARR_ORD+=($OPT_MENU)
+      fi 
+    done 
+
+
+  ## Add options to kickstart menu
+  ## Read the (ORDered) node list in reverse order, so that controller is the first opt
+  KS_INDEX=1
+  for ((i=${#KS_MENU_ARR_ORD[@]}-1; i>=0; i--)); do
+    OPT_MENU="${KS_MENU_ARR_ORD[$i]}"
+    ksf_menu_add $OPT_MENU "^$KS_INDEX Kickstart $OPT_MENU"
+    KS_INDEX=$((KS_INDEX+1)) 
+  done
+
+
   ## Set the default boot option
+  ## (It does not work, but I set it anyway)
   TMPF="$OUT_DIR/files/isolinux/txt.cfg"
   TMP_TMPF=$(cat $TMPF)
   rm $TMPF
@@ -123,10 +139,11 @@ gen_iso () {
   ## Generate kickstart files for each node from template
   run_or_exit "envsubst --version"
   
+  echo "   > Generating kickstart files"
   for HOST in "${KS_MENU_ARR[@]}"
    do 
      ## Set content of post-install
-     echo "   > Generating kickstart file at " $OUT_DIR/files/ks/ks-${HOST}.cfg
+     #echo "   > Generating kickstart file at " $OUT_DIR/files/ks/ks-${HOST}.cfg
      export IP=$(eval 'echo $IP_'${HOST}) #IP for current server
      # echo " > machine: ${HOST} => IP= ${IP}"
 
