@@ -25,14 +25,14 @@ elif [ "$OP_SYS" == "Debian" ] || [ "$OP_SYS" == "Ubuntu" ]
     update_pkg_cache () {
       ## If the cache is older than 100 minutes, update it
       STAP_FILE="/var/lib/apt/periodic/update-success-stamp"
-      if [ "$[$(date +%s) - $(stat -c %Z $STAMP_FILE)]" -ge 6000000 ]; then
-         eval "sudo apt-get -y update" $SILENCER
-      fi
+      #if [ "$[$(date +%s) - $(stat -c %Z $STAMP_FILE)]" -ge 6000000 ]; then
+      #   eval "sudo apt-get -y update" $SILENCER
+      #fi
       }
 
     pkg_installed () { dpkg -l $1 |grep "ii"; }
     #PKG_CHECK="dpkg -l "
-    PKGS="curl gettext genisoimage dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system " # virt-manager ubuntu-vm-builder 
+    PKGS="curl gettext genisoimage dumpet qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system fuseiso virt-manager"
     KVM_GROUPS="libvirtd kvm"
 
 elif [ "$OP_SYS" == "CentOS" ] || [ "$OP_SYS" == "Red Hat" ]
@@ -51,10 +51,19 @@ check_root () {
 for PKG in $PKGS
   do
     if ! pkg_installed $PKG &> /dev/null; then
-      echo ">>>> Installing $PKG"
-      check_root
-      update_pkg_cache
-      install_pkg $PKG &> /tmp/bomsi_install.log
+      echo "The package $PKG is not installed. Do you want to run"
+      echo "  sudo apt-get -y install $PKG"
+      echo "from here? [Y/n]"
+  
+      read -p "Do you want to install $PKG? " -n 1 -r
+      echo    # (optional) move to a new line
+      if [[ $REPLY =~ ^[Yy]$ ]]
+        then      
+            echo ">>>> Installing $PKG"
+            check_root
+            update_pkg_cache
+            install_pkg $PKG &> /tmp/bomsi_install.log
+      fi
     else
       eval echo "   $PKG is already installed" $SILENCER
     fi

@@ -26,7 +26,7 @@ check_iso () {
   get_iso () {
   if [ ! -f ${ISO_DIR_PATH}/${BASE_ISO_NAME} ]
     then
-      echo ">> No ISO found. Downloading ISO to: ${ISO_DIR_PATH}/${BASE_ISO_NAME}"
+      echo ">> No ISO found. Downloading ISO to: ${ISO_DIR_PATH}${BASE_ISO_NAME}"
       curl -s -o ${ISO_DIR_PATH}/${BASE_ISO_NAME} ${URL}/${OP_VERSION}/${BASE_ISO_NAME}
   fi
   }

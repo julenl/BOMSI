@@ -63,6 +63,8 @@ gen_iso () {
 
   echo " >> Mount the ISO file in /tmp/mountiso"
   mkdir -p /tmp/mountiso/
+
+  run_or_exit "fuseiso -h"
   fuseiso $PATH_TO_ISO /tmp/mountiso/
   rm -rf $OUT_DIR/
   
