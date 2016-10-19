@@ -177,7 +177,9 @@ rm -f /var/lib/apt/lists/*
 sed -i 's/PermitRootLogin .*/PermitRootLogin/'
 
 # Add the BOMSI dir to the PATH
-echo 'PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/bin:/root/bomsi/lib"' > /etc/environment
+#echo 'PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/bin:/root/bomsi/lib"' > /etc/environment
+echo "$ENV_VAR" > /etc/environment
+echo "$APT_PROXY" > /etc/apt/apt.conf.d/95proxies
 echo $DIFF_LOCAL_LOCALES > /root/local_locales
 
 

@@ -7,7 +7,7 @@
 load_bomsi_functions () {
     for file in /root/bomsi/lib/l_vars /root/bomsi/lib/t_*
         do
-            echo "#### Sourcing $file"
+            #echo "#### Sourcing $file"
             source $file 
         done
 }

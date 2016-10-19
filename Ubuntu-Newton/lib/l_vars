@@ -5,6 +5,9 @@
 ##
 
 
+## Make sure that the output of the commands are in English
+export LC_ALL=C
+
 ## Elegant function to set default variables if variables were not set
 set_if_unset () {
     ## Usage: set_if_unset VARIABLE VALUE
@@ -42,6 +45,42 @@ set_if_unset VIRT_NIC_MAN 'network=management'
 
 # Cirros image name
 CIRROS_IMG="cirros-0.3.4-x86_64-disk.img"
+
+
+## Do we need a HTTP Proxy? Set address or leave empty if not needed
+## Do we need a HTTP proxy? Leave empty if not
+export SET_HTTP_PROXY_ADDR="http://http-proxy.ifam.fraunhofer.de:81/"
+
+## If SET_HTTP_PROXY_ADDR was set, set up the env variables
+if [ ! -z "$SET_HTTP_PROXY_ADDR" ]; then
+  . lib/t_vars
+  ENV_PROXY="""
+http_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
+https_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
+ftp_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
+no_proxy=\\\"localhost,127.0.1.1,controller, compute1, compute2\\\"
+HTTP_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
+HTTPS_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
+FTP_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
+NO_PROXY=\\\"localhost,127.0.1.1,controller, compute1, compute2\\\"
+"""
+
+  PROXY_LAST_PART=$(echo "$SET_HTTP_PROXY_ADDR" |awk -F// '{print $2}')
+
+  # Triple-scape the qoutes because they are parsed twice
+  export APT_PROXY="""Acquire::http::proxy \\\"http://$PROXY_LAST_PART\\\";
+Acquire::ftp::proxy \\\"ftp://$PROXY_LAST_PART\\\";
+Acquire::https::proxy \\\"https://$PROXY_LAST_PART\\\";"""
+  
+  #echo "$APT_PROXY" >> /etc/apt/apt.conf.d/95proxies
+
+fi
+
+ENV_PATH='PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/bin:/root/bomsi/lib"'
+export ENV_VAR="""$ENV_PATH
+$ENV_PROXY
+"""
+
 
 
 ## Root and "user" password of the target machines
