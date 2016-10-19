@@ -137,11 +137,11 @@ setup_compute () {
       sleep 5 && log_step '.   > waiting for nova port (8775) in controller'
     done
 
-  # Better wait until the controller replies properly
-  while ! curl -s controller:8774 |grep -q SUPPORTED
-    do
-      sleep 5 && log_step '.   > waiting for nova (controller) to reply'
-    done
+ # # Better wait until the controller replies properly
+ # while ! curl -s controller:8774 |grep -q SUPPORTED
+ #   do
+ #     sleep 5 && log_step '.   > waiting for nova (controller) to reply'
+ #   done
 
   sleep 10
   # Restart the compute service
