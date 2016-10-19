@@ -160,8 +160,58 @@ setup_compute2 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; 
 setup_compute3 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; }
 
 
+setup_clean () {
+  ## This option just leaves a clean Ubuntu machine
+  true
+}
 
 
+setup_packages () {
+  ## This option installs a machine and tries to download all the packages
+  ## to the /root/Packages directory
+
+    . /root/bomsi/lib/t_vars
+    sed  -i 's/us.archive.ubuntu.com/archive.ubuntu.com/g' /etc/apt/sources.list
+    apt-get update
+
+    apt-get -y upgrade 
+
+
+    ## Check all files with pattern lib/t_* and parse all the packages
+    ## that are installed in all machines
+    ALL_PKGS=""
+    for file in /root/bomsi/lib/t_*;
+      do
+        echo $file
+        while read -r line || [[ -n "$line" ]]; do
+          if [[ "$line" == *"apt-get -y"* ]] || [ ! -z $READ_NEXT ]; then
+             if [[ "$line" != "#"* ]]; then
+               echo "LINE $line" 
+               PKG=$(echo "$line" | awk -F"apt-get -y install" '{print $2}')
+               PKG=$(echo "$PKG" |awk -F"&" '{print $1}' |awk -F'\' '{print $1}')
+               echo $PKG
+               [ ! -z $READ_NEXT ] && PKG=$(echo "$line")
+               ALL_PKGS+=$PKG
+               unset READ_NEXT
+               if [[ "$line" == *'\' ]]; then
+                  READ_NEXT="True"
+               fi
+            fi
+          fi
+        done < "$file"
+      done
+    echo "ALL_PKGS $ALL_PKGS"
+
+    for PKG in $ALL_PKGS;
+      do
+        apt-get -y install "$PKG"
+      done
+
+    ## Copy all cached packages to a safe place
+    mkdir -p /root/Packages
+    cp /var/cache/apt/archives/*.deb /root/Packages/
+
+}
 
 
 

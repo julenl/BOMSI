@@ -34,13 +34,16 @@ export IPLD_compute1=31
 export IPLD_compute2=32
 export IPLD_compute3=33
 export IPLD_neutron=21
+export IPLD_clean=253
+export IPLD_packages=254
 ## IPs of the servers
 export IP_controller=${IPPR_A}${IPLD_controller}
 export IP_compute1=${IPPR_A}${IPLD_compute1}
 export IP_compute2=${IPPR_A}${IPLD_compute2}
 export IP_compute3=${IPPR_A}${IPLD_compute3}
-export CONTROLLER_IP=${IP_controller}
-export IP_neutron=$IPPR_A$NEUTRON_LN
+export IP_clean=${IPPR_A}${IPLD_clean}
+export IP_packages=${IPPR_A}${IPLD_packages}
+
 ### PASSWORDS
 export MYSQL_ROOT="Password"
 export ADMIN_PASS=${MYSQL_ROOT}

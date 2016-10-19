@@ -86,7 +86,7 @@ gen_iso () {
   [ -f ${ISO_DIR_PATH}/${CIRROS_IMG} ] && \
   cp ${ISO_DIR_PATH}/${CIRROS_IMG} $OUT_DIR/files/bomsi/LocalRepo/
 
-  KS_MENU_ARR=(controller compute1 compute2 compute3) # network block object)
+  KS_MENU_ARR=(controller compute1 compute2 compute3 clean packages) # network block object)
 
   ## Try to set boot menu to auto select the right option
   for OPT_MENU in "${KS_MENU_ARR[@]}"
@@ -99,7 +99,7 @@ gen_iso () {
     done
 
   ## If the VM name does not include a "node name" install a clean machine
-  [ -z ${DEF_KICKSTART+x} ] && DEF_KICKSTART="controller"
+  [ -z ${DEF_KICKSTART+x} ] && DEF_KICKSTART="clean"
 
 
   ## The "default" option on the isolinux/txt.cfg file does not seem to work so
@@ -147,7 +147,7 @@ gen_iso () {
      ## Set content of post-install
      #echo "   > Generating kickstart file at " $OUT_DIR/files/ks/ks-${HOST}.cfg
      export IP=$(eval 'echo $IP_'${HOST}) #IP for current server
-     # echo " > machine: ${HOST} => IP= ${IP}"
+      #echo " > machine: ${HOST} => IP= ${IP}"
 
      if [ "$IP" ]; then # If the IP is not empty
        export POST_SCRIPT="""
@@ -172,6 +172,8 @@ $IP_controller controller
 $IP_compute1 compute1  
 $IP_compute2 compute2  
 $IP_compute3 compute3  
+$IP_clean clean
+$IP_packages packages  
 ${IPPR_A}$NEUTRON_LN network   
 ${IPPR_A}$CINDER_LN block     
 EOF

@@ -7,6 +7,8 @@ export MUTE=''
 
 HELP_TEXT="""
 bomsi-iso version $BOMSI_ISO_VERSION for OpenStack release $BOMSI_ISO_RELEASE.
+Usage: ./bomsi OPTIONS
+
 -i, --install_vm              Install a virtual machine with the created iso image
 -n, --name=VM_NAME            Name for the quemu virtual machine being created.
 -r, --root_password=Password  Root password for the kickstarted machine
@@ -23,7 +25,7 @@ bomsi-iso version $BOMSI_ISO_VERSION for OpenStack release $BOMSI_ISO_RELEASE.
 -Q, --quiet                   Toggle quiet mode (no output)
 -h, --help                    Print this help and exit
 
-Default configurations are provided for any name (-n) containing controller, compute1, compute2, compute3, network, block, object or clean. Clean kickstarts a clean CentOS machine, i.e. for dowloading the packages with gather_packages for a full off-line installation.
+Default configurations are provided for any name (-n) containing controller, compute1, compute2, compute3, packages or clean. The packages option downloads all the packages to be installed and the clean one leaves a basic installation.
 
 Examples:
 Create an ISO image with a boot menu which allows to select which machine is going to be installed:
