@@ -47,11 +47,6 @@ install_keystone (){
   log_step ".   > Populate the keystone database"
   su -s /bin/sh -c "keystone-manage db_sync" keystone
 
-  echo "$PATH" >> /root/debug
-  echo "$TMPF" >> /root/debug
-  echo "$(which susti)" >> /root/debug
-  echo "$(susti)" >> /root/debug
-
   log_step ".   > Initialize Fernet key repositories:"
   keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
   keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
