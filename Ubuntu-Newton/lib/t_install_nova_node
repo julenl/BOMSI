@@ -47,7 +47,7 @@ install_nova_node (){
   susti $TMPF vnc "vncserver_listen = 0.0.0.0"
   susti $TMPF vnc "vncserver_proxyclient_address = \$my_ip"
   #susti $TMPF vnc "novncproxy_base_url = http://controller:6080/vnc_auto.html"
-  susti $TMPF vnc "novncproxy_base_url = http://$CONTROLLER_IP:6080/vnc_auto.html"
+  susti $TMPF vnc "novncproxy_base_url = http://$IP_controller:6080/vnc_auto.html"
 
   susti $TMPF glance "api_servers = http://controller:9292"
   susti $TMPF oslo_concurrency "lock_path = /var/lib/nova/tmp"

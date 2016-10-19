@@ -14,7 +14,7 @@ mysqld_rabbitmq (){
 
 cat > /etc/mysql/mariadb.conf.d/99-mysqld_openstack.cnf <<EOF
 [mysqld]
-bind-address = $CONTROLLER_IP
+bind-address = $IP_controller
 default-storage-engine = innodb
 innodb_file_per_table
 max_connections = 4096
