@@ -120,6 +120,6 @@ done
 
 ## If -Q is used this script will return nothing
 if [ -n "$MUTE" ]; then
-  exec &>
+  exec &>-
 fi
 

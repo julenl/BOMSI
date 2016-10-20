@@ -66,7 +66,7 @@ if [ ! -z "$HTTP_PROXY" ]; then
    else
       export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
    fi
-elif [ ! -z "$USE_PROXY" ];
+elif [ ! -z "$USE_PROXY" ]; then
    export SET_HTTP_PROXY_ADDR="$USE_PROXY"
 fi
 
