@@ -172,9 +172,18 @@ setup_packages () {
 
     . /root/bomsi/lib/t_vars
     sed  -i 's/us.archive.ubuntu.com/archive.ubuntu.com/g' /etc/apt/sources.list
-    apt-get update
 
-    apt-get -y upgrade 
+    apt-get update
+    apt-get -y upgrade
+
+    # Enable intalling the latest repository
+    apt-get -y install software-properties-common 
+
+    REPO_CMD=$(grep "add-apt-repository -y" /root/bomsi/lib/t_basic_packages)
+    eval "$REPO_CMD"
+
+
+    apt-get -y dist-upgrade 
 
 
     ## Check all files with pattern lib/t_* and parse all the packages
@@ -207,9 +216,61 @@ setup_packages () {
         apt-get -y install "$PKG"
       done
 
-    ## Copy all cached packages to a safe place
-    mkdir -p /root/Packages
-    cp /var/cache/apt/archives/*.deb /root/Packages/
+    ## Copy all cached packages to the apache dir
+    rm /var/www/html/index.html
+    cp /var/cache/apt/archives/*.deb /var/www/html/
+
+    #mkdir -p /root/Packages
+    #cp /var/cache/apt/archives/*.deb /root/Packages/
+
+
+    apt-get -y install dpkg-dev
+    cd /var/www/html/
+    dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+
+    cat > /var/www/html/Release << EOF
+Archive: xenial
+Origin: Ubuntu
+Label: BOMSI
+Architecture: amd64
+EOF
+ 
+
+    apt-get -y install rng-tools
+    sed -i 's/.*HRNGDEVICE=\/dev\/null/HRNGDEVICE=\/dev\/null/' /etc/default/rng-tools
+    /etc/init.d/rng-tools restart
+
+cat > ../gpg-options <<EOF
+     %echo Generating a basic OpenPGP key
+     Key-Type: DSA
+     Key-Length: 1024
+     Subkey-Type: ELG-E
+     Subkey-Length: 1024
+     Name-Real: BOMSI OpenStack
+     Name-Comment: OpenStack Installer
+     Name-Email: bomsi@example.com
+     Expire-Date: 0
+     Passphrase: abc
+     %pubring key.pub
+     %secring key.sec
+     # Do a commit here, so that we can later print "done" :-)
+     %commit
+     %echo done
+EOF
+
+   # https://ubuntuforums.org/showthread.php?t=182984
+   #http://superuser.com/questions/1003403/how-to-use-gpg-gen-key-in-a-script
+    gpg --batch --gen-key ../gpg-options
+    /etc/init.d/rng-tools stop
+
+    gpg --no-default-keyring --secret-keyring ./key.sec \
+       --keyring ./key.pub --list-secret-keys
+
+    export GPG_KEY=59C6E460
+    gpg -bao Release.gpg Release
+    gpg --export -a "MyGPGName" > public.key
+ 
+
 
 }
 

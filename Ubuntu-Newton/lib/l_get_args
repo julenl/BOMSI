@@ -20,6 +20,7 @@ Usage: ./bomsi OPTIONS
 --no_firstrun                 Do not execute the init.d script after reboot
 --virt_nic_man=\"network=management\"
                               The name of the management network (or bridge) for VMs (i.e. \"bridge=br0\")
+-P, --proxy[='http://proxy']  Use a HTTP-PROXY. (def. \$HTTP_PROXY)
 -v, --version                 Print version and exit
 -V, --verbose                 Toggle verbose mode
 -Q, --quiet                   Toggle quiet mode (no output)
@@ -47,46 +48,55 @@ do
   case $i in
       -i|--install_vm)
         export INSTALL_VM=' '
-        shift # next value in @
+        shift
       ;;
       -n=*|--vm_name=*)
         export VM_NAME="${i#*=}"
         export OUT_ISO_NAME="BOMSI-$VM_NAME.iso"
         export INSTALL_VM=' '
-        shift # past argument=value
+        shift
       ;;
       -r=*|--root_password=*)
         #export ROOT_PASSWORD="${i#*=}"
         sustivar "ROOT_PASSWORD=${i#*=}"
-        shift 
+        shift
       ;;
       -o=*|--output_iso_name=*)
         export OUT_ISO_NAME="${i#*=}"
-        shift 
+        shift
       ;;
       --no_firstrun)
         export NO_FIRSTRUN=""
-        shift 
+        shift
       ;;
       --use_internet)
         export INSTALL_FROM_INTERNET="YES"
-        shift 
+        shift
       ;;
       --virt_nic_man=*)
         export VIRT_NIC_MAN="${i#*=}"
-        shift 
+        shift
       ;;
       -u=*|--create_usb=*)
         export USB_DEV="${i#*=}"
-        shift 
+        shift
       ;;
       -g=*|--gatewayln=*)
         sustivar "GATEWAY_LN=${i#*=}"
-        shift 
+        shift
       ;;
       -d=*|--dnsln=*)
         sustivar "DNS_LN=${i#*=}"
-        shift 
+        shift
+      ;;
+      -P|--proxy)
+        export SET_PROXY="YES"
+        shift
+      ;;
+      -P=*|--proxy=*)
+        export SET_PROXY="YES"
+        export USE_PROXY="${i#*=}"
+        shift
       ;;
       -v|--version)
         echo "$BASH_ARGV version $VERSION"
@@ -94,25 +104,22 @@ do
       ;;
       -V|--verbose)
         export SILENCER=''
-        shift # next value in @
+        shift
       ;;
       -Q|--quiet)
         export MUTE=' '
         export SILENCER=' &> /dev/null '
-        shift # next value in @
+        shift
       ;;
       -h|--help|*)
         echo "$HELP_TEXT"
         exit
-      ;;
-      *)
-              # unkonwn options 
       ;;
   esac
 done
 
 ## If -Q is used this script will return nothing
 if [ -n "$MUTE" ]; then
-  exec &>-
+  exec &>
 fi
 

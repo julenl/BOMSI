@@ -56,9 +56,8 @@ for PKG in $PKGS
       echo "from here? [Y/n]"
   
       read -p "Do you want to install $PKG? " -n 1 -r
-      echo    # (optional) move to a new line
-      if [[ $REPLY =~ ^[Yy]$ ]]
-        then      
+      echo
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo ">>>> Installing $PKG"
             check_root
             update_pkg_cache

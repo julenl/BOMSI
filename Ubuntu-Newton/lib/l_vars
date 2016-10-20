@@ -47,10 +47,28 @@ set_if_unset VIRT_NIC_MAN 'network=management'
 CIRROS_IMG="cirros-0.3.4-x86_64-disk.img"
 
 
-## Do we need a HTTP Proxy? Set address or leave empty if not needed
-## Do we need a HTTP proxy? Leave empty if not
+
+
+## Do we need a HTTP Proxy? Suggest to use the HTTP_PROXY variable if set.
 #export SET_HTTP_PROXY_ADDR="http://http-proxy.example.com:81/"
-export SET_HTTP_PROXY_ADDR=""
+
+if [ ! -z "$HTTP_PROXY" ]; then
+   if [ -z "$SET_PROXY" ]; then
+      echo 'WARNING: A $HTTP_PROXY variable was found'
+      echo 'Do you want to use:'
+      echo "     $HTTP_PROXY"
+      read -p "as http-proxy for your environment? [Y/n] " -n 1 -r
+      echo
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+          echo ">> Setting $HTTP_PROXY as HTTP_PROXY"
+          export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
+      fi
+   else
+      export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
+   fi
+elif [ ! -z "$USE_PROXY" ];
+   export SET_HTTP_PROXY_ADDR="$USE_PROXY"
+fi
 
 ## If SET_HTTP_PROXY_ADDR was set, set up the env variables
 if [ ! -z "$SET_HTTP_PROXY_ADDR" ]; then
@@ -59,11 +77,11 @@ if [ ! -z "$SET_HTTP_PROXY_ADDR" ]; then
 http_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
 https_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
 ftp_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
-no_proxy=\\\"localhost,127.0.1.1,controller, compute1, compute2\\\"
+no_proxy=\\\"localhost,127.0.1.1,controller, compute1, compute2, clean, packages\\\"
 HTTP_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
 HTTPS_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
 FTP_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
-NO_PROXY=\\\"localhost,127.0.1.1,controller, compute1, compute2\\\"
+NO_PROXY=\\\"localhost,127.0.1.1,controller, compute1, compute2, clean,packages\\\"
 """
 
   PROXY_LAST_PART=$(echo "$SET_HTTP_PROXY_ADDR" |awk -F// '{print $2}')
@@ -81,21 +99,6 @@ ENV_PATH='PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/u
 export ENV_VAR="""$ENV_PATH
 $ENV_PROXY
 """
-
-
-
-## Root and "user" password of the target machines
-#set_if_unset ROOT_PASSWORD 1234
-#set_if_unset NEW_ROOT_PASSWORD 1234
-
-#GUI variables
-#export USB_DISK_DEV=sdb
-#export HD=vda
-#export VCPUS=2
-#export VRAM=4092
-#export VIRT_NIC_MAN='network=management'
-#export OUT_ISO_NAME_GUI=BOMSI-controller.iso
-#export INSTALL_TYPE=2_nodes
 
 
 ## Some basic functions
