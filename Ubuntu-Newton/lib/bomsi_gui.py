@@ -144,10 +144,8 @@ class Main(Gtk.Window):
           vars_entry = Gtk.Entry()
           vars_entry.set_width_chars(14)
 
-              
-
           try:
-             VALUE=l_bomsi_gui_lib.read_bomsi_vars(FILE,PATH_TO_BOMSI)[VARIABLE]
+             VALUE=l_bomsi_gui_lib.read_bomsi_vars(FILE,'STRING',PATH_TO_BOMSI)[VARIABLE]
           except:
              VALUE='' # If variable not defined in l/t_vars
 
@@ -167,6 +165,9 @@ class Main(Gtk.Window):
           return vars_li
        
 
+
+
+        ### HERE GOES THE CONTENT OF THE TABS AND VARIABLES ###
 
         # Main variables
 
@@ -398,7 +399,7 @@ class Main(Gtk.Window):
 
 
         
-        #Create KVM machines with the ISO(s)
+        ### Create KVM machines with the ISO(s) ###
         vbox_kvm = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_kvm = Gtk.Label()
         label_kvm.set_markup("Local KVM \n<small>use local KVM (virsh)</small>")
@@ -412,12 +413,14 @@ class Main(Gtk.Window):
         combo_kvm.set_entry_text_column(0)
         combo_kvm.append_text('2_nodes')
         combo_kvm.append_text('controller')
-        combo_kvm.append_text('network')
+        #combo_kvm.append_text('network')
         combo_kvm.append_text('compute1')
         combo_kvm.append_text('compute2')
         combo_kvm.append_text('compute3')
+        combo_kvm.append_text('clean')
+        combo_kvm.append_text('packages')
 
-        combo_kvm.connect("changed", l_bomsi_gui_lib.edit_bomsi_var, PATH_TO_BOMSI,'INSTALL_TYPE',combo_kvm)
+        combo_kvm.connect("changed", l_bomsi_gui_lib.edit_bomsi_var,'l_vars',PATH_TO_BOMSI,'INSTALL_TYPE',combo_kvm)
 
         button_kvm = Gtk.Button()
         button_kvm.set_image(logo_opt_kvm)

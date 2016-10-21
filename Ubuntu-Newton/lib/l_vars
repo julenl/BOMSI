@@ -29,7 +29,7 @@ set_if_unset BASE_ISO_NAME ubuntu-16.04-server-amd64.iso
 set_if_unset PATH_TO_ISO "$ISO_DIR_PATH/$BASE_ISO_NAME"/
 
 set_if_unset USB_DISK_DEV "/dev/sdb"
- 
+
 ## For the virtual environment
 
 # Name of the target HD device (i.e. vda/sda)
@@ -54,18 +54,23 @@ export CIRROS_IMG="cirros-0.3.4-x86_64-disk.img"
 #export SET_HTTP_PROXY_ADDR="http://http-proxy.example.com:81/"
 
 if [ ! -z "$HTTP_PROXY" ]; then
-   if [ -z "$SET_PROXY" ]; then
-      echo 'WARNING: A $HTTP_PROXY variable was found'
-      echo 'Do you want to use:'
-      echo "     $HTTP_PROXY"
-      read -p "as http-proxy for your environment? [Y/n] " -n 1 -r
-      echo
-      if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-          echo ">> Setting $HTTP_PROXY as HTTP_PROXY"
+   if [[ "$SET_PROXY" != "NO" ]]; then
+      if [[ "$USE_PROXY" == *"://"* ]]; then
           export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
+      else
+          echo 'WARNING: A $HTTP_PROXY variable was found'
+          echo 'Do you want to use:'
+          echo "     $HTTP_PROXY"
+          read -p "as http-proxy for your environment? [Y/n] " -n 1 -r REPLY
+          echo
+          if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+              echo ">> Setting $HTTP_PROXY as HTTP_PROXY"
+              export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
+          fi
       fi
    else
-      export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
+      unset SET_HTTP_PROXY_ADDR
+      echo "UNSET"
    fi
 elif [ ! -z "$USE_PROXY" ]; then
    export SET_HTTP_PROXY_ADDR="$USE_PROXY"
@@ -91,7 +96,7 @@ NO_PROXY=\\\"localhost,127.0.1.1,controller, compute1, compute2, clean,packages\
   export APT_PROXY="""Acquire::http::proxy \\\"http://$PROXY_LAST_PART\\\";
 Acquire::ftp::proxy \\\"ftp://$PROXY_LAST_PART\\\";
 Acquire::https::proxy \\\"https://$PROXY_LAST_PART\\\";"""
-  
+
   #echo "$APT_PROXY" >> /etc/apt/apt.conf.d/95proxies
 
 fi
@@ -118,7 +123,7 @@ run_or_exit () {
 \033[0m"
    exit
   fi
-} 
+}
 
 sustivar () {
 # Substitute the value of a variable in this file

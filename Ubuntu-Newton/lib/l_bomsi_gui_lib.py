@@ -91,112 +91,53 @@ def sys_info(PWD, PATH_TO_BOMSI):
 
 
 
-## READ local variables
-def read_bomsi_vars(FILE,PATH_TO_BOMSI):
+## READ t_vars and l_vars line by line, parse variables and add them to BOMSI_VARS
+
+def read_bomsi_vars(FILE,OUTPUT_FORMAT,PATH_TO_BOMSI):
+   # FILE can be lib/t_vars or lib/l_vars
+   # OUTPUT_FORMAT can be STRING, RAW or LINE (returns full line in file)
+   # Returns a dictionary with key:value for all l_/t_vars variables
    BOMSI_VARS={}
    PARSE = False
-   val=''
-   #Read the t_vars file line by line, parse the variables and add to BOMSI_VARS dictionary
-   for var in open(PATH_TO_BOMSI+'/lib/'+FILE,"r"):
-       li=var.strip()
+
+   for line in open(PATH_TO_BOMSI+'/lib/'+FILE,"r"):
+       #if FILE == "l_vars":
+       #   print line
+       li=line.strip()
+       var,val='',''
        #Parse normal variables (line starts with "export")
        if li.startswith("export ") and "=" in li:
            var_val=li.split()[1]
            var=var_val.split("=")[0]
            val=var_val.split("=")[1]
-           if val.startswith('"') and val.endswith('"'):
-               val = val[1:-1]
-           # If variables contain variables, expand them
-           if len(val)>0 and "$" in val:
-               val=os.popen('. '+PATH_TO_BOMSI+'/lib/'+FILE+' && echo '+val+'""')
-               val=val.readlines()[0].strip()
-           BOMSI_VARS.update({ var : val })
-
-       #Parse variables set with the "set_if_unset" function
        elif li.startswith("set_if_unset ") and len(li.split()) > 2:
            var=li.split()[1]
            val=li.split()[2]
+
+       if val:
+           if OUTPUT_FORMAT == "LINE":
+               val=li.rstrip()
+
+           # Trim first and last " quote marks from value
            if val.startswith('"') and val.endswith('"'):
                val = val[1:-1]
-           # If variables contain variables, expand them
-           if len(val)>0 and "$" in val:
-               val=os.popen('. '+PATH_TO_BOMSI+'/lib/' +FILE+' && echo '+val+'""')
-               val=val.readlines()[0].strip()    
+
+           if OUTPUT_FORMAT == "RAW":
+               val = val
+           if OUTPUT_FORMAT == "STRING":
+               # If variables contain variables, expand them
+               if len(val)>0 and "$" in val:
+                   val=os.popen('. '+PATH_TO_BOMSI+'/lib/'+FILE+' && echo '+val+'""')
+                   val=val.readlines()[0].strip()
+
            BOMSI_VARS.update({ var : val })
-   #print BOMSI_VARS
    return BOMSI_VARS
 
 
 
-## READ OpenStack variables
-def read_bomsi_t_vars(PATH_TO_BOMSI):
-   BOMSI_T_VARS={}
-   PARSE = False
-   #Read the t_vars file line by line, parse the variables and add to BOMSI_VARS dictionary
-   for var in open(PATH_TO_BOMSI+"/lib/t_vars","r"):
-       li=var.strip()
-       if li.startswith("export ") and "=" in li:
-           var_val=li.split()[1]
-           var=var_val.split("=")[0]
-           val=var_val.split("=")[1]
-           if val.startswith('"') and val.endswith('"'):
-               val = val[1:-1]
-           # If variables contain variables, expand them
-           if "$" in val:
-               val=os.popen('. '+PATH_TO_BOMSI+'/lib/t_vars && echo '+val+'""')
-               val=val.readlines()[0].strip()
-               
-           BOMSI_T_VARS.update({ var : val })
-   #print BOMSI_T_VARS
-   return BOMSI_T_VARS
 
 
-
-
-#      if li == "### VARIABLES":
-#        PARSE = True
-#      if PARSE:
-#          if not li.startswith("#") and "=" in li and "$PATH" not in li and "awk " not in li and "sed " not in li:
-#              #Remove comments in line
-#              if '#' in var:
-#                var=var.split('#')[0]
-#              var=var.rstrip().split()[1]
-#              var_val_tmp=""
-#              var_var=var.split("=")[0] #variable
-#              var_val_bulk=var.split("=")[1] #value
-#              if "'" in var_val_bulk or '"' in var_val_bulk:
-#                var_val_bulk="=".join(var.split("=")[1:])
-#              else: 
-#                var_val_bulk=var.split("=")[1] 
-
-#              #If the BASH variable is defined using (an)other variable(s)
-#              if '$' in var_val_bulk:
-#                var_val_bulk = var_val_bulk.replace('{','').replace('}','').strip()
-#                for N in range(var_val_bulk.count('$')):
-#                  var_val_tmp_i=var_val_bulk.split("$")[N+1]
-#                  #If the variable contains a string IPPR_T"1"
-#                  if '"' in var_val_tmp_i:
-#                    var_val_tmp0=var_val_tmp_i.split('"')[0]
-#                    var_val_tmp1=var_val_tmp_i.split('"')[1]
-#                    var_val_tmp += BOMSI_VARS[var_val_tmp0]+var_val_tmp1
-#                  else:
-#                    #Using a try, in case variables were not properly defined
-#                    try:
-#                      BOMSI_VARS[var_val_tmp_i]
-#                      var_val_tmp += BOMSI_VARS[var_val_tmp_i]  
-#                    except:
-#                      print var_var, var_val_tmp_i,"variable not defined"
-#                      var_val_tmp
-#              else:
-#                var_val_bulk = var_val_bulk.replace('"','')
-#                var_val_tmp = var_val_bulk      
-#        
-#              var_val = var_val_tmp 
-#              BOMSI_VARS.update({ var_var : var_val })
-
-
-
-
+# EDIT variables as and were they were originally defined
 
 def edit_bomsi_var(button, FILE, PATH_TO_BOMSI, VARIABLE, VALUE):
     #print VALUE.get_text()
@@ -205,33 +146,77 @@ def edit_bomsi_var(button, FILE, PATH_TO_BOMSI, VARIABLE, VALUE):
     except:
       VALUE = VALUE.get_active_text()
 
-    VARS_FILE=PATH_TO_BOMSI+"/lib/bomsi_vars"
+    VARS_FILE=PATH_TO_BOMSI+"/lib/"+FILE
     BULK=[]
-    VAR_CHANGED = False
-    for line in open(VARS_FILE, "r"):
-      if line.strip() != '':
-        line=line.strip()
-        if " "+VARIABLE+"=" in line:
-          line="export " + VARIABLE + "=" + VALUE
-          BULK.append(line)
-          VAR_CHANGED = True
-        else:
-          BULK.append(line)
 
-    if not VAR_CHANGED :
-      line="export " + VARIABLE + "=" + VALUE
-      BULK.append(line)
+    #Did the variable change?
+    #Compare new variable with the one defined on the l_/t_vars
+    #Is the variable alredy in the file
+    try:
+        raw_line=read_bomsi_vars(FILE,'LINE',PATH_TO_BOMSI)[VARIABLE]
+        new_var=False
+    except:  
+        new_var=True
+
+    if not new_var:
+        if raw_line.startswith("set_if_unset") and len(raw_line.split()) > 2:
+           var=raw_line.split()[1]
+           val=raw_line.split()[2]
+        elif raw_line.startswith("export") and "=" in raw_line:
+           var_val=raw_line.split()[1]
+           var=var_val.split("=")[0]
+           val=var_val.split("=")[1]
+
+        if val == VALUE or val == '"'+VALUE+'"' or val == "'"+VALUE+"'":
+            # Variables didn't change (maybe qoutes, but it's the same). Do nothing
+            pass
+        else:
+            # Try expanding the variables
+            expval=os.popen('. '+PATH_TO_BOMSI+'/lib/'+FILE+' && echo $'+var+'""')
+            expval=expval.readlines()[0].strip()
+            if expval == VALUE or expval == '"'+VALUE+'"' or expval == "'"+VALUE+"'":
+                # Expanding the old value as variable returns the same as the new value
+                print "Values are the same"
+                pass
+            else:
+                # Here is where we SUBSTITUTE the value
+                for line in open(VARS_FILE, "r"):
+                    if len(line.split()) > 1:
+                      if line.split()[1].startswith(var):
+                          #first_arg is export OR set_if_unset
+                          sep,firstarg=" ",""
+                          first_arg=raw_line.split()[0]
+                          if "export" in raw_line:
+                              sep="="
+                          BULK.append(first_arg + " " + var + sep + VALUE)
+                          var_found=True
+                      else:
+                          BULK.append(line.rstrip())
+                    else:
+                      BULK.append(line.rstrip())
+
+    else:
+        # If variable not defined in file
+        print "Appending 'export "+VARIABLE+" "+VALUE+"' to "+ VARS_FILE
+        for line in open(VARS_FILE, "r"):
+            BULK.append(line.rstrip())
+        BULK.append("export " + VARIABLE + "=" + VALUE)
+
+    if len(BULK) > 10:
+      output=open(PATH_TO_BOMSI+'/lib/'+FILE,"w")
+      #print len(BULK)
+      for line in BULK:
+         output.write("%s\n" % (line))
+
+      output.close()
+      print VARIABLE + ' saved as ' + VALUE + ' in lib/' + FILE +' file'
        
-    out=open(PATH_TO_BOMSI+"/lib/bomsi_vars","w")
-    for line in BULK:
-      print>>out, line
-    out.close()
-    print VARIABLE + " saved as " + VALUE + " in lib/bomsi_vars file"
+
     
 
 
 def get_pendrives():
-     BULK=os.popen("ls -l /dev/disk/by-id/usb* |awk -F/ '{print $NF}'")
+     BULK=os.popen("ls -l /dev/disk/by-id/usb* 2> /dev/null |awk -F/ '{print $NF}'")
      DISKS=[]
      for line in BULK.readlines():
          DISKS.append(line.strip().rstrip('1234567890'))
@@ -253,10 +238,9 @@ def set_selected_disk(nothing,combo,PATH_TO_BOMSI):
 
 def opt_packages(widget,PATH_TO_BOMSI):
   import os,subprocess
-  os.system('sudo '+PATH_TO_BOMSI+'/bomsi-iso.sh -n=Packages')    
+  os.system(''+PATH_TO_BOMSI+'/bomsi-iso.sh -n=Packages')    
   import time
   IPTMP="10.0.0.254"
-  ROOT_PASSWORD="1234"
   os.system('ssh-keygen -f "$HOME/.ssh/known_hosts" -R '+IPTMP)
   CMD='sshpass -p '+ROOT_PASSWORD+' ssh -o "StrictHostKeyChecking no" root@'+IPTMP+' hostname'
   PKGS_UP=False
@@ -274,7 +258,7 @@ def opt_packages(widget,PATH_TO_BOMSI):
   print "... this might take quite long..."
   os.system(PATH_TO_BOMSI+'/gather_packages_os.sh ')
   print "DONE!"
-  print "Packages stored in ~/centos_packages directory"  
+  print "Packages stored in ~/Packages directory"  
   
 
 
@@ -283,7 +267,7 @@ def opt_only_iso(widget,PATH_TO_BOMSI,ISO_LABEL):
     #name=entry.get_text()
     print 'Creating iso file: ~/'+ISO_LABEL+''
     #os.system('sudo PYTHONPATH=$PYTHONPATH:'+PATH_TO_BOMSI+' '+PATH_TO_BOMSI+'/bomsi-iso.sh ')
-    os.system('sudo '+PATH_TO_BOMSI+'/bomsi-iso.sh ')
+    os.system(''+PATH_TO_BOMSI+'/bomsi ')
     import getpass
     if name != 'BOMSI-multiboot.iso':
       os.system('sudo mv ~/BOMSI-multiboot.iso ~/'+name+'')
@@ -293,8 +277,8 @@ def opt_only_iso(widget,PATH_TO_BOMSI,ISO_LABEL):
 
 def create_pendrive(widget, PATH_TO_BOMSI):
    try:
-     read_bomsi_vars('l_vars',PATH_TO_BOMSI)
-     BOMSI_VARS = read_bomsi_vars('l_vars',PATH_TO_BOMSI)
+     read_bomsi_vars('l_vars','STRING',PATH_TO_BOMSI)
+     BOMSI_VARS = read_bomsi_vars('l_vars','STRING',PATH_TO_BOMSI)
      USB_DISK_DEV=BOMSI_VARS['USB_DISK_DEV']
      print 'Generating a BOMSI ISO file at: ~/'
      print 'Installing ISO on device /dev/'+USB_DISK_DEV
@@ -306,41 +290,48 @@ def create_pendrive(widget, PATH_TO_BOMSI):
 
 
 def create_local_virt_env(widget, PATH_TO_BOMSI, entry):
-   read_bomsi_vars('l_vars',PATH_TO_BOMSI)
+   read_bomsi_vars('l_vars','STRING',PATH_TO_BOMSI)
    machine=entry.get_active_text()
-   BOMSI_VARS = read_bomsi_vars('l_vars',PATH_TO_BOMSI)
+   BOMSI_VARS = read_bomsi_vars('l_vars','STRING',PATH_TO_BOMSI)
    try:
-     INSTALL_TYPE = BOMSI_VARS['INSTALL_TYPE']
+     INSTALL_TYPE = read_bomsi_vars('l_vars','STRING',PATH_TO_BOMSI)['INSTALL_TYPE']
+     #BOMSI_VARS['INSTALL_TYPE']
    except:
      INSTALL_TYPE = '2_nodes'   
 
    try:
-    OUT_ISO_NAME_GUI=BOMSI_VARS['OUT_ISO_NAME_GUI'].split('.iso')[0]
+    OUT_ISO_NAME=BOMSI_VARS['OUT_ISO_NAME'].split('.iso')[0]
    except:
-    OUT_ISO_NAME_GUI='BOMSI-multiboot'
+    OUT_ISO_NAME='BOMSI-multiboot'
 
 
    if INSTALL_TYPE == '2_nodes':
       print '##### Generating and installing the controller node ####'
-      os.system('sudo ./bomsi-iso.sh -n=1.controller')
+      #os.system('./bomsi -n=1.controller')
       print '##### Generating and installing the first compute node ####'
-      os.system('sudo ./bomsi-iso.sh -n=1.compute1')
+      #os.system('./bomsi -n=1.compute1')
      
    elif INSTALL_TYPE == 'controller':
       print '##### Generating and installing the controller node ####'
-      os.system('sudo ./bomsi-iso.sh -n=1.controller')
+      os.system('./bomsi -n=1.controller')
    elif INSTALL_TYPE == 'compute1':
       print '##### Generating and installing only the first compute node ####'
-      os.system('sudo ./bomsi-iso.sh -n=1.compute1')
+      os.system('./bomsi -n=1.compute1')
    elif INSTALL_TYPE == 'compute2':
       print '##### Generating and installing only the second compute node ####'
-      os.system('sudo ./bomsi-iso.sh -n=1.compute2')
+      os.system('./bomsi -n=1.compute2')
    elif INSTALL_TYPE == 'compute3':
       print '##### Generating and installing only the third compute node ####'
-      os.system('sudo ./bomsi-iso.sh -n=1.compute3')
-   elif INSTALL_TYPE == 'network':
-      print '##### Generating and installing only the network node ####'
-      os.system('sudo ./bomsi-iso.sh -n=1.network')
+      os.system('./bomsi -n=1.compute3')
+   elif INSTALL_TYPE == 'clean':
+      print '##### Generating and installing a clean machine ####'
+      os.system('./bomsi -n=1.clean')
+   elif INSTALL_TYPE == 'packages':
+      print '##### Generating and installing only a machine to download packages ####'
+      os.system('./bomsi -n=1.packages')
+   #elif INSTALL_TYPE == 'network':
+   #   print '##### Generating and installing only the network node ####'
+   #   os.system('sudo ./bomsi-iso.sh -n=1.network')
 
 
 
