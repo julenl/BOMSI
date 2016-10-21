@@ -21,7 +21,7 @@ Usage: ./bomsi OPTIONS
 --no_firstrun                 Do not execute the init.d script after reboot
 --virt_nic_man=\"network=management\"
                               The name of the management network (or bridge) for VMs (i.e. \"bridge=br0\")
--P, --proxy[='http://proxy']  Use a HTTP-PROXY. (def. \$HTTP_PROXY)
+-P, --proxy[='http://proxy']  Use a HTTP-PROXY. Use '-P=NO' to ignore. (def. \$HTTP_PROXY)
 -v, --version                 Print version and exit
 -V, --verbose                 Toggle verbose mode
 -Q, --quiet                   Toggle quiet mode (no output)
@@ -101,6 +101,12 @@ do
       -P=*|--proxy=*)
         export SET_PROXY="YES"
         export USE_PROXY="${i#*=}"
+        #Make the NO case insensitive
+        ARG="${i#*=}"
+        if [ "${ARG,,}" == "no" ]; then
+           export SET_PROXY="NO"
+           echo "${i#*=,,}" $SET_PROXY
+        fi
         shift
       ;;
       -v|--version)
