@@ -1,11 +1,12 @@
 #!/usr/bin/python
 
+import gi
+gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 import os
 import sys
 
-sys.path.append("./lib")
-print sys.path
+#sys.path.append("./lib")
 import l_bomsi_gui_lib #library for functions on this GUI
 
 global PWD
@@ -67,7 +68,7 @@ class Main(Gtk.Window):
       #First row with logo, system info and basic checks
         topbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
 
-        logo_img = Gtk.Image.new_from_file(PWD+'/gui_img/BOMSI_logo_gui.png')
+        logo_img = Gtk.Image.new_from_file(PWD+'/lib/gui_img/BOMSI_logo_gui.png')
         topbox.pack_start(logo_img, False, False, 0) #(child,expand=True,fill=True,padding=0) 
 
 
@@ -128,7 +129,8 @@ class Main(Gtk.Window):
  
 
         #Function for creating elements on the variables dialog 
-        def vars_entry_unit(LABEL,VARIABLE,TTTEXT):
+        def vars_entry_unit(LABEL,FILE,VARIABLE,TTTEXT):
+          # Display label, file containing the variable (t/l_vars), variable name and tootip text
           grid_li = Gtk.Grid(valign=Gtk.Align.START)
                    
  
@@ -141,16 +143,21 @@ class Main(Gtk.Window):
 
           vars_entry = Gtk.Entry()
           vars_entry.set_width_chars(14)
+
+              
+
           try:
-             VALUE=l_bomsi_gui_lib.read_bomsi_vars(PATH_TO_BOMSI)[VARIABLE]
+             VALUE=l_bomsi_gui_lib.read_bomsi_vars(FILE,PATH_TO_BOMSI)[VARIABLE]
           except:
-             VALUE='' # If variable not defined in bomsi_vars
+             VALUE='' # If variable not defined in l/t_vars
+
+
           vars_entry.set_text(VALUE)
           vars_entry.set_halign(Gtk.Align.END)
           vars_li.pack_start(vars_entry, False, False, 0)
 
           button_save = Gtk.Button(label="<Save",halign=Gtk.Align.END)
-          button_save.connect("clicked",l_bomsi_gui_lib.edit_bomsi_var,PATH_TO_BOMSI,VARIABLE,vars_entry)
+          button_save.connect("clicked",l_bomsi_gui_lib.edit_bomsi_var,FILE,PATH_TO_BOMSI,VARIABLE,vars_entry)
           vars_li.pack_start(button_save, False, False, 0)
 
           #grid_li.attach(label,0,2,0,1) 
@@ -168,39 +175,40 @@ class Main(Gtk.Window):
         table_mainvars.set_col_spacings(10)
 
         tooltip='Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso'
-        item=vars_entry_unit('ISO name', 'OUT_ISO_NAME_GUI', tooltip)
+        item=vars_entry_unit('ISO name', 'l_vars','OUT_ISO_NAME', tooltip)
         table_mainvars.attach(item,0,2,0,1)
 
         tooltip='Disk device in which \nUbuntu is going to\nget installed.\n i.e.: sda (for physical HDs)\nor vda (for virtual HDs'
-        item=vars_entry_unit('Disk name', 'HD', tooltip)
+        item=vars_entry_unit('Disk name', 'l_vars', 'HD', tooltip)
         table_mainvars.attach(item,0,2,1,2)
 
         tooltip='Number of Virtual CPUs\n(for virtual environments).\n i.e.: 2'
-        item=vars_entry_unit('# of VCPUs', 'VCPUS', tooltip)
+        item=vars_entry_unit('# of VCPUs', 'l_vars', 'VCPUS', tooltip)
         table_mainvars.attach(item,0,2,2,3)
 
         tooltip='Amount of RAM memory (in Mb)\n(for virtual environments).\n i.e.: 4092'
-        item=vars_entry_unit('Virt. RAM', 'VRAM', tooltip)
+        item=vars_entry_unit('Virt. RAM', 'l_vars', 'VRAM', tooltip)
         table_mainvars.attach(item,0,2,3,4)
 
         tooltip='The name of the management\nnetwork (or bridge) for VMs\n (i.e. "network=management" or "bridge=br0")'
-        item=vars_entry_unit('Virt mgm net', 'VIRT_NIC_MAN', tooltip)
+        item=vars_entry_unit('Virt mgm net', 'l_vars', 'VIRT_NIC_MAN', tooltip)
         table_mainvars.attach(item,0,2,4,5)
 
+
         tooltip='Network interface associated to the admin network.\ni.e.: eth0'
-        item=vars_entry_unit('iface admin', 'IFACE0',tooltip)
+        item=vars_entry_unit('iface admin',  't_vars','IFACE0',tooltip)
         table_mainvars.attach(item,2,4,0,1)
 
-        tooltip='Network interface associated to the tunnel network\ni.e.:eth1 or eth0.1'
-        item=vars_entry_unit('iface tunnel', 'IFACE1',tooltip)
-        table_mainvars.attach(item,2,4,1,2)
+        #tooltip='Network interface associated to the tunnel network\ni.e.:eth1 or eth0.1'
+        #item=vars_entry_unit('iface tunnel', 'IFACE1',tooltip)
+        #table_mainvars.attach(item,2,4,1,2)
 
-        tooltip='Network interface associated to the storage network\ni.e.:eth2 or eth0.2'
-        item=vars_entry_unit('iface storage', 'IFACE2',tooltip)
-        table_mainvars.attach(item,2,4,2,3)
+        #tooltip='Network interface associated to the storage network\ni.e.:eth2 or eth0.2'
+        #item=vars_entry_unit('iface storage', 'IFACE2',tooltip)
+        #table_mainvars.attach(item,2,4,2,3)
 
         tooltip='Network interface associated to the external network'
-        item=vars_entry_unit('iface extern', 'IFACE_EXT',tooltip)
+        item=vars_entry_unit('iface extern',  't_vars','IFACE_EXT',tooltip)
         table_mainvars.attach(item,2,4,3,5)
 
 #       tooltip=
@@ -210,17 +218,17 @@ class Main(Gtk.Window):
 
 
 
-        item=vars_entry_unit('ISO name', 'OUT_ISO_NAME_GUI', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso')
+        item=vars_entry_unit('ISO name',  'l_vars','OUT_ISO_NAME', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso')
 
 
         vars_main_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         #First column of main variables tab
         vars_main_hbox_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,valign=Gtk.Align.START)
-        vars_main_hbox_vbox.pack_start(vars_entry_unit('ISO name', 'OUT_ISO_NAME_GUI', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso'), True, False, 0)
-        vars_main_hbox_vbox.pack_start(vars_entry_unit('Disk name', 'HD', 'Disk device in which \nUbuntu is going to\nget installed.\n i.e.: sda'), True, False, 0)
-        vars_main_hbox_vbox.pack_start(vars_entry_unit('# of VCPUs', 'VCPUS', 'Number of Virtual CPUs\n(for virtual environments).\n i.e.: 2'), False, False, 0)
-        vars_main_hbox_vbox.pack_start(vars_entry_unit('RAM', 'VRAM', 'Amount of RAM memory (in Mb)\n(for virtual environments).\n i.e.: 4092'), False, False, 0)
-        vars_main_hbox_vbox.pack_start(vars_entry_unit('Virt mgm net', 'VIRT_NIC_MAN', 'The name of the management\nnetwork (or bridge) for VMs\n (i.e. "management" or "br0")'), False, False, 0)
+        vars_main_hbox_vbox.pack_start(vars_entry_unit('ISO name','l_vars', 'OUT_ISO_NAME', 'Name of the ISO file which will be created\n(in the home directory)\ni.e.:controller.iso'), True, False, 0)
+        vars_main_hbox_vbox.pack_start(vars_entry_unit('Disk name','l_vars','HD', 'Disk device in which \nUbuntu is going to\nget installed.\n i.e.: sda'), True, False, 0)
+        vars_main_hbox_vbox.pack_start(vars_entry_unit('# of VCPUs','l_vars','VCPUS', 'Number of Virtual CPUs\n(for virtual environments).\n i.e.: 2'), False, False, 0)
+        vars_main_hbox_vbox.pack_start(vars_entry_unit('RAM','l_vars','VRAM', 'Amount of RAM memory (in Mb)\n(for virtual environments).\n i.e.: 4092'), False, False, 0)
+        vars_main_hbox_vbox.pack_start(vars_entry_unit('Virt mgm net','l_vars', 'VIRT_NIC_MAN', 'The name of the management\nnetwork (or bridge) for VMs\n (i.e. "management" or "br0")'), False, False, 0)
         #vars_main_hbox_vbox.pack_start(vars_entry_unit('', '', ''), True, True, 0)
 
         vars_main_hbox.pack_start(vars_main_hbox_vbox, False, False, 0)
@@ -239,18 +247,18 @@ class Main(Gtk.Window):
         vars_pwt_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         #First column of password variables tab
         vars_pwt_hbox_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,valign=Gtk.Align.START)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Ubuntu root', 'ROOT_PASSWORD', 'Root password for login to the machine'), True, True, 0)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('MariaDB admin', 'MYSQL_ROOT','Root password for the MySQL/Mariadb database'), True, True, 0)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Rabbit admin', 'RABBIT_PASS','RabbitMQ admin password'), True, True, 0)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('admin user', 'KEYSTONE_ADMIN_PASSWORD','"OpenStack admin user'), True, True, 0)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('demo user', 'KEYSTONE_DEMO_PASSWORD','"OpenStack demo user'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Ubuntu root','t_vars','ROOT_PASSWORD', 'Root password for login to the machine'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('MariaDB admin','t_vars','MYSQL_ROOT','Root password for the MySQL/Mariadb database'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Rabbit admin','t_vars','RABBIT_PASS','RabbitMQ admin password'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('admin user','t_vars','ADMIN_PASS','"OpenStack admin user'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('demo user','t_vars','DEMO_PASS','"OpenStack demo user'), True, True, 0)
         vars_pwt_hbox.pack_start(vars_pwt_hbox_vbox, True, True, 0)
 
         #Second column of passwords variables tab
         vars_pwt_hbox_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,valign=Gtk.Align.START)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Glance', 'GLANCE_PASSWORD','Password for Glance'), True, True, 0)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Nova', 'NOVA_PASSWORD','Password for Neutron'), True, True, 0)
-        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Neutron', 'NEUTRON_PASSWORD','Password for Nova'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Glance','t_vars','GLANCE_PASSWORD','Password for Glance'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Nova','t_vars','NOVA_PASSWORD','Password for Neutron'), True, True, 0)
+        vars_pwt_hbox_vbox.pack_start(vars_entry_unit('Neutron','t_vars','NEUTRON_PASSWORD','Password for Nova'), True, True, 0)
         vars_pwt_hbox.pack_start(vars_pwt_hbox_vbox, True, True, 0)
 
         notebook_vars_pwl = Gtk.Label(label="Passwords")
@@ -264,19 +272,19 @@ class Main(Gtk.Window):
         #vars_ips_hbox_vbox.pack_start(vars_entry_unit('iface tunnel', 'IFACE1','Network interface associated to the tunnel network'), True, True, 0)
         #vars_ips_hbox_vbox.pack_start(vars_entry_unit('iface storage', 'IFACE2','Network interface associated to the storage network'), True, True, 0)
         #vars_ips_hbox_vbox.pack_start(vars_entry_unit('iface external', 'IFACE_EXT','Network interface associated to the external network'), True, True, 0)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Controller', 'CONTROLLER_IP','IP of the controller server'), True, True, 0)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Network', 'NEUTRON_NODE_IP','IP of the network node'), True, True, 0)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Compute', 'COMPUTE_IPS','IP of the compute node (1st one)'), True, True, 0)
+        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Controller','t_vars','IP_controller','IP of the controller server'), True, True, 0)
+        #vars_ips_hbox_vbox.pack_start(vars_entry_unit('Network', 'NEUTRON_NODE_IP','IP of the network node'), True, True, 0)
+        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Compute1','t_vars','IP_compute1','IP of the compute node (1st one)'), True, True, 0)
         vars_ips_hbox.pack_start(vars_ips_hbox_vbox, True, True, 0)
  
 
         #Second column of the Server IPs tab
         vars_ips_hbox_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10,valign=Gtk.Align.START)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Prefix admin net','IPPR_A','Admin network without the last number'), True, True, 0)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Prefix tunnel net','IPPR_T','Tunnel network without the last number'), True, True, 0)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Prefix stor. net','IPPR_S','Storage network without the last number'), True, True, 0)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Gateway', 'GATEWAY','Default gateway for the management network'), True, True, 0)
-        vars_ips_hbox_vbox.pack_start(vars_entry_unit('DNS server', 'NAMESERVER','IP of the DNS server'), True, True, 0)
+        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Pref. admin net','t_vars','IPPR_A','Admin network without the last number'), True, True, 0)
+        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Pref. ext. net','t_vars','IPPR_EXT','External network without last number'), True, True, 0)
+        #vars_ips_hbox_vbox.pack_start(vars_entry_unit('Prefix stor. net','IPPR_S','Storage network without the last number'), True, True, 0)
+        vars_ips_hbox_vbox.pack_start(vars_entry_unit('Gateway','t_vars','GATEWAY','Default gateway for the management network'), True, True, 0)
+        vars_ips_hbox_vbox.pack_start(vars_entry_unit('DNS server','t_vars','NAMESERVER','IP of the DNS server'), True, True, 0)
         vars_ips_hbox.pack_start(vars_ips_hbox_vbox, True, True, 0)
 
         notebook_vars_ipl = Gtk.Label(label="Server IPs")
@@ -304,7 +312,7 @@ class Main(Gtk.Window):
         vbox_packages = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_packages = Gtk.Label()
         label_packages.set_markup("Download OS files\n <small>using a VM</small>")
-        logo_packages = Gtk.Image.new_from_file(PWD+'/gui_img/download_packages.png')
+        logo_packages = Gtk.Image.new_from_file(PWD+'/lib/gui_img/download_packages.png')
         button_packages = Gtk.Button()
         button_packages.set_image(logo_packages)
         button_packages.connect("clicked", l_bomsi_gui_lib.opt_packages,PATH_TO_BOMSI)
@@ -318,14 +326,14 @@ class Main(Gtk.Window):
         vbox_iso = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_only_iso = Gtk.Label()
         label_only_iso.set_markup("Dry run \n <small>Only generate ISO</small>")
-        logo_opt_iso = Gtk.Image.new_from_file(PWD+'/gui_img/cd.png')
+        logo_opt_iso = Gtk.Image.new_from_file(PWD+'/lib/gui_img/cd.png')
 
         #label_only_iso_name = Gtk.Label()
         #label_only_iso_name.set_markup('File name:')        
 
         #entry_only_iso = Gtk.Entry()
         try:
-          ISO_LABEL_GUI=l_bomsi_gui_lib.read_bomsi_vars(PATH_TO_BOMSI)['OUT_ISO_NAME_GUI']
+          ISO_LABEL_GUI=l_bomsi_gui_lib.read_bomsi_l_vars(PATH_TO_BOMSI)['OUT_ISO_NAME_GUI']
         except:
           ISO_LABEL_GUI='BOMSI-multiboot.iso'
         #entry_only_iso.set_text(ISO_LABEL)
@@ -345,7 +353,7 @@ class Main(Gtk.Window):
         vbox_pen = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_iso2pen = Gtk.Label()
         label_iso2pen.set_markup("Create Pendrive \n<small>with auto-installer</small>")
-        logo_opt_pen = Gtk.Image.new_from_file(PWD+'/gui_img/pen.png')
+        logo_opt_pen = Gtk.Image.new_from_file(PWD+'/lib/gui_img/pen.png')
         button_iso2pen = Gtk.Button()
         button_iso2pen.set_image(logo_opt_pen)
         ERROR_WIN=self.on_error_clicked
@@ -394,7 +402,7 @@ class Main(Gtk.Window):
         vbox_kvm = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_kvm = Gtk.Label()
         label_kvm.set_markup("Local KVM \n<small>use local KVM (virsh)</small>")
-        logo_opt_kvm = Gtk.Image.new_from_file(PWD+'/gui_img/kvm.png')
+        logo_opt_kvm = Gtk.Image.new_from_file(PWD+'/lib/gui_img/kvm.png')
 
         label_kvm_name = Gtk.Label()
         label_kvm_name.set_markup('Install type:')        
@@ -429,7 +437,7 @@ class Main(Gtk.Window):
         vbox_rkvm = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         label_rkvm = Gtk.Label()
         label_rkvm.set_markup("Remote KVM \n<small>remote KVM server</small>")
-        logo_opt_rkvm = Gtk.Image.new_from_file(PWD+'/gui_img/kvm.png')
+        logo_opt_rkvm = Gtk.Image.new_from_file(PWD+'/lib/gui_img/kvm.png')
         button_rkvm = Gtk.Button()
         button_rkvm.set_image(logo_opt_rkvm)
         vbox_rkvm.pack_start(label_rkvm, False, True, 0)

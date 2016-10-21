@@ -91,62 +91,114 @@ def sys_info(PWD, PATH_TO_BOMSI):
 
 
 
-
-
-
-def read_bomsi_vars(PATH_TO_BOMSI):
+## READ local variables
+def read_bomsi_vars(FILE,PATH_TO_BOMSI):
    BOMSI_VARS={}
    PARSE = False
-   #Read the bomsi_vars file line by line and parse the variables
-   for var in open(PATH_TO_BOMSI+"/lib/bomsi_vars","r"):
+   val=''
+   #Read the t_vars file line by line, parse the variables and add to BOMSI_VARS dictionary
+   for var in open(PATH_TO_BOMSI+'/lib/'+FILE,"r"):
        li=var.strip()
-       if li == "### VARIABLES":
-         PARSE = True
-       if PARSE:
-           if not li.startswith("#") and "=" in li and "$PATH" not in li and "awk " not in li and "sed " not in li:
-               #Remove comments in line
-               if '#' in var:
-                 var=var.split('#')[0]
-               var=var.rstrip().split()[1]
-               var_val_tmp=""
-               var_var=var.split("=")[0] #variable
-               var_val_bulk=var.split("=")[1] #value
-               if "'" in var_val_bulk or '"' in var_val_bulk:
-                 var_val_bulk="=".join(var.split("=")[1:])
-               else: 
-                 var_val_bulk=var.split("=")[1] 
+       #Parse normal variables (line starts with "export")
+       if li.startswith("export ") and "=" in li:
+           var_val=li.split()[1]
+           var=var_val.split("=")[0]
+           val=var_val.split("=")[1]
+           if val.startswith('"') and val.endswith('"'):
+               val = val[1:-1]
+           # If variables contain variables, expand them
+           if len(val)>0 and "$" in val:
+               val=os.popen('. '+PATH_TO_BOMSI+'/lib/'+FILE+' && echo '+val+'""')
+               val=val.readlines()[0].strip()
+           BOMSI_VARS.update({ var : val })
 
-               #If the BASH variable is defined using (an)other variable(s)
-               if '$' in var_val_bulk:
-                 var_val_bulk = var_val_bulk.replace('{','').replace('}','').strip()
-                 for N in range(var_val_bulk.count('$')):
-                   var_val_tmp_i=var_val_bulk.split("$")[N+1]
-                   #If the variable contains a string IPPR_T"1"
-                   if '"' in var_val_tmp_i:
-                     var_val_tmp0=var_val_tmp_i.split('"')[0]
-                     var_val_tmp1=var_val_tmp_i.split('"')[1]
-                     var_val_tmp += BOMSI_VARS[var_val_tmp0]+var_val_tmp1
-                   else:
-                     #Using a try, in case variables were not properly defined
-                     try:
-                       BOMSI_VARS[var_val_tmp_i]
-                       var_val_tmp += BOMSI_VARS[var_val_tmp_i]  
-                     except:
-                       print var_var, var_val_tmp_i,"variable not defined"
-                       var_val_tmp
-               else:
-                 var_val_bulk = var_val_bulk.replace('"','')
-                 var_val_tmp = var_val_bulk      
-         
-               var_val = var_val_tmp 
-               BOMSI_VARS.update({ var_var : var_val })
-
+       #Parse variables set with the "set_if_unset" function
+       elif li.startswith("set_if_unset ") and len(li.split()) > 2:
+           var=li.split()[1]
+           val=li.split()[2]
+           if val.startswith('"') and val.endswith('"'):
+               val = val[1:-1]
+           # If variables contain variables, expand them
+           if len(val)>0 and "$" in val:
+               val=os.popen('. '+PATH_TO_BOMSI+'/lib/' +FILE+' && echo '+val+'""')
+               val=val.readlines()[0].strip()    
+           BOMSI_VARS.update({ var : val })
+   #print BOMSI_VARS
    return BOMSI_VARS
 
 
 
+## READ OpenStack variables
+def read_bomsi_t_vars(PATH_TO_BOMSI):
+   BOMSI_T_VARS={}
+   PARSE = False
+   #Read the t_vars file line by line, parse the variables and add to BOMSI_VARS dictionary
+   for var in open(PATH_TO_BOMSI+"/lib/t_vars","r"):
+       li=var.strip()
+       if li.startswith("export ") and "=" in li:
+           var_val=li.split()[1]
+           var=var_val.split("=")[0]
+           val=var_val.split("=")[1]
+           if val.startswith('"') and val.endswith('"'):
+               val = val[1:-1]
+           # If variables contain variables, expand them
+           if "$" in val:
+               val=os.popen('. '+PATH_TO_BOMSI+'/lib/t_vars && echo '+val+'""')
+               val=val.readlines()[0].strip()
+               
+           BOMSI_T_VARS.update({ var : val })
+   #print BOMSI_T_VARS
+   return BOMSI_T_VARS
 
-def edit_bomsi_var(button, PATH_TO_BOMSI, VARIABLE, VALUE):
+
+
+
+#      if li == "### VARIABLES":
+#        PARSE = True
+#      if PARSE:
+#          if not li.startswith("#") and "=" in li and "$PATH" not in li and "awk " not in li and "sed " not in li:
+#              #Remove comments in line
+#              if '#' in var:
+#                var=var.split('#')[0]
+#              var=var.rstrip().split()[1]
+#              var_val_tmp=""
+#              var_var=var.split("=")[0] #variable
+#              var_val_bulk=var.split("=")[1] #value
+#              if "'" in var_val_bulk or '"' in var_val_bulk:
+#                var_val_bulk="=".join(var.split("=")[1:])
+#              else: 
+#                var_val_bulk=var.split("=")[1] 
+
+#              #If the BASH variable is defined using (an)other variable(s)
+#              if '$' in var_val_bulk:
+#                var_val_bulk = var_val_bulk.replace('{','').replace('}','').strip()
+#                for N in range(var_val_bulk.count('$')):
+#                  var_val_tmp_i=var_val_bulk.split("$")[N+1]
+#                  #If the variable contains a string IPPR_T"1"
+#                  if '"' in var_val_tmp_i:
+#                    var_val_tmp0=var_val_tmp_i.split('"')[0]
+#                    var_val_tmp1=var_val_tmp_i.split('"')[1]
+#                    var_val_tmp += BOMSI_VARS[var_val_tmp0]+var_val_tmp1
+#                  else:
+#                    #Using a try, in case variables were not properly defined
+#                    try:
+#                      BOMSI_VARS[var_val_tmp_i]
+#                      var_val_tmp += BOMSI_VARS[var_val_tmp_i]  
+#                    except:
+#                      print var_var, var_val_tmp_i,"variable not defined"
+#                      var_val_tmp
+#              else:
+#                var_val_bulk = var_val_bulk.replace('"','')
+#                var_val_tmp = var_val_bulk      
+#        
+#              var_val = var_val_tmp 
+#              BOMSI_VARS.update({ var_var : var_val })
+
+
+
+
+
+def edit_bomsi_var(button, FILE, PATH_TO_BOMSI, VARIABLE, VALUE):
     #print VALUE.get_text()
     try:
       VALUE = VALUE.get_text()
@@ -195,7 +247,7 @@ def get_pendrives():
 def set_selected_disk(nothing,combo,PATH_TO_BOMSI):
     #disk = combo.get_active_text()
     if combo.get_active_text() != None:
-      edit_bomsi_var("nothing",PATH_TO_BOMSI,'USB_DISK_DEV',combo)
+      edit_bomsi_var("nothing","l_vars",PATH_TO_BOMSI,'USB_DISK_DEV',combo)
       print "USB_DISK was set to:",combo.get_active_text()
 
 
@@ -241,8 +293,8 @@ def opt_only_iso(widget,PATH_TO_BOMSI,ISO_LABEL):
 
 def create_pendrive(widget, PATH_TO_BOMSI):
    try:
-     read_bomsi_vars(PATH_TO_BOMSI)
-     BOMSI_VARS = read_bomsi_vars(PATH_TO_BOMSI)
+     read_bomsi_vars('l_vars',PATH_TO_BOMSI)
+     BOMSI_VARS = read_bomsi_vars('l_vars',PATH_TO_BOMSI)
      USB_DISK_DEV=BOMSI_VARS['USB_DISK_DEV']
      print 'Generating a BOMSI ISO file at: ~/'
      print 'Installing ISO on device /dev/'+USB_DISK_DEV
@@ -254,9 +306,9 @@ def create_pendrive(widget, PATH_TO_BOMSI):
 
 
 def create_local_virt_env(widget, PATH_TO_BOMSI, entry):
-   read_bomsi_vars(PATH_TO_BOMSI)
+   read_bomsi_vars('l_vars',PATH_TO_BOMSI)
    machine=entry.get_active_text()
-   BOMSI_VARS = read_bomsi_vars(PATH_TO_BOMSI)
+   BOMSI_VARS = read_bomsi_vars('l_vars',PATH_TO_BOMSI)
    try:
      INSTALL_TYPE = BOMSI_VARS['INSTALL_TYPE']
    except:

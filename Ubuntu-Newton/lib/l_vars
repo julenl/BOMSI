@@ -26,8 +26,9 @@ set_if_unset OUT_ISO_NAME "BOMSI-Custom.iso"
 set_if_unset ISO_DIR_PATH "$HOME/ISOS/"
 set_if_unset BASE_ISO_NAME ubuntu-16.04-server-amd64.iso
 #set_if_unset BASE_ISO_NAME ubuntu-14.04.4-server-amd64.iso
-export PATH_TO_ISO=$ISO_DIR_PATH/$BASE_ISO_NAME
+set_if_unset PATH_TO_ISO "$ISO_DIR_PATH/$BASE_ISO_NAME"/
 
+set_if_unset USB_DISK_DEV "/dev/sdb"
  
 ## For the virtual environment
 
@@ -44,7 +45,7 @@ set_if_unset VIRT_NIC_MAN 'network=management'
 
 
 # Cirros image name
-CIRROS_IMG="cirros-0.3.4-x86_64-disk.img"
+export CIRROS_IMG="cirros-0.3.4-x86_64-disk.img"
 
 
 
@@ -59,7 +60,7 @@ if [ ! -z "$HTTP_PROXY" ]; then
       echo "     $HTTP_PROXY"
       read -p "as http-proxy for your environment? [Y/n] " -n 1 -r
       echo
-      if [[ $REPLY =~ ^[Yy]$ ]]; then
+      if [[ "$REPLY" =~ ^[Yy]$ ]]; then
           echo ">> Setting $HTTP_PROXY as HTTP_PROXY"
           export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
       fi
@@ -96,10 +97,11 @@ Acquire::https::proxy \\\"https://$PROXY_LAST_PART\\\";"""
 fi
 
 ENV_PATH='PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/bin:/root/bomsi/lib"'
-export ENV_VAR="""$ENV_PATH
+ENV_VAR="""$ENV_PATH
 $ENV_PROXY
 """
 
+export ENV_VAR="$ENV_VAR"
 
 ## Some basic functions
 log_step (){

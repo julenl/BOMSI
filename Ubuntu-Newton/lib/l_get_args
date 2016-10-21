@@ -11,6 +11,7 @@ Usage: ./bomsi OPTIONS
 
 -i, --install_vm              Install a virtual machine with the created iso image
 -n, --name=VM_NAME            Name for the quemu virtual machine being created.
+-g, --graphic                 Launch the Graphical User Interface (GUI) of BOMSI (experimental).
 -r, --root_password=Password  Root password for the kickstarted machine
 -u, --create_usb=/dev/sdb     Create a bootable pendrive on the give device with the new ISO. disables VM
 -g, --gatewayln               Last number of Gateway IP in management network (10.0.0.1 --> 1)
@@ -56,8 +57,12 @@ do
         export INSTALL_VM=' '
         shift
       ;;
+      -g |--graphical)
+        echo "Launching the Graphical User Interface of BOMSI"
+        $THISD/lib/bomsi_gui.py
+        exit
+      ;;
       -r=*|--root_password=*)
-        #export ROOT_PASSWORD="${i#*=}"
         sustivar "ROOT_PASSWORD=${i#*=}"
         shift
       ;;
