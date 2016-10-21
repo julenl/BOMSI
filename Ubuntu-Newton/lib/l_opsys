@@ -55,7 +55,7 @@ for PKG in $PKGS
       echo "  sudo apt-get -y install $PKG"
       echo "from here? [Y/n]"
   
-      read -p "Do you want to install $PKG? " -n 1 -r
+      read -p "Do you want to install $PKG? " -n 1 -r REPLY
       echo
       if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo ">>>> Installing $PKG"
