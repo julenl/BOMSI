@@ -1,9 +1,19 @@
 #! /usr/bin/env bash
 
+# If we just installed virt-manager virsh will complain about an error connecting to the socket
+# to avoid that, if 'virsh list' returns an error, we'll run the command on a new environment
+
+OUT_VIRSH=$(virsh list 2>&1 |grep "error: Failed to connect socket to")
+if [[ ! -z $OUT_VIRSH ]];then
+   NEW_ENV_S="sudo su $USER -c '"
+   NEW_ENV_E="'"
+   echo "Enter the sudo password to run the virt-install command preceded by: $NEW_ENV_S $NEW_ENV_E "
+fi
+
 gen_vnet () {
   ## Creates a virtual network if not already present, and if subnet not already in use
   ## Usage: gen_vnet NAME NET virbr"N" (i.e. virbr1: gen_vnet management 10.0.0.1 1)
-if [[ ! $(virsh net-list |grep $1) ]]; then
+if [[ ! $($NEW_ENV_S virsh net-list $NEW_ENV_E|grep $1) ]]; then
 echo ">> Generating virtual network: " $1 " with gateway on " $2
 
   ## Make sure that the subnet is not used by another bridge
@@ -37,9 +47,9 @@ cat > /tmp/xmlnetfile << EOF
 EOF
 
 #virsh net-create /tmp/xmlnetfile #dissapears after reboot
-eval virsh net-define /tmp/xmlnetfile $SILENCER
-eval virsh net-start $1 $SILENCER
-eval virsh net-autostart $1 $SILENCER
+eval $NEW_ENV_S virsh net-define /tmp/xmlnetfile $NEW_ENV_E $SILENCER
+eval $NEW_ENV_S virsh net-start $1 $NEW_ENV_E $SILENCER
+eval $NEW_ENV_S virsh net-autostart $1 $NEW_ENV_E $SILENCER
 fi
 }
 
@@ -53,21 +63,21 @@ start_iso_vm () {
   #set -x
 
   
-  virsh list &> /dev/null || echo "ERROR: If 'virsh list' does not work, it's probably because you just installed libvirt. Try to restart/relog-in." 
+  #virsh list &> /dev/null || echo "ERROR: If 'virsh list' does not work, it's probably because you just installed libvirt. Try to restart/relog-in." 
 
-  run_or_exit "virsh list"
-  run_or_exit "virt-install --version"
+  run_or_exit "$NEW_ENV_S virsh list $NEW_ENV_E"
+  run_or_exit "$NEW_ENV_S virt-install --version $NEW_ENV_E"
 
 
   # Pop-up the virt-manager GUI if we are running with X environment  
-  [[ $TERM == *"xterm"* ]] && eval virt-manager $SILENCER 
+  [[ $TERM == *"xterm"* ]] && eval $NEW_ENV_S virt-manager $NEW_ENV_E $SILENCER 
   
 
   gen_vnet management ${IPPR_A}1
   gen_vnet ext-net ${IPPR_EXT}1
   ## Exit if networks were not properly generated
-  run_or_exit "virsh net-list |grep management"
-  run_or_exit "virsh net-list |grep ext-net"
+  run_or_exit "$NEW_ENV_S virsh net-list $NEW_ENV_E |grep management"
+  run_or_exit "$NEW_ENV_S virsh net-list $NEW_ENV_E |grep ext-net"
 
   if [ -z ${VM_NAME+x} ]; then # If VM name was not set... 
     TMPNAME="Ubuntu_OS-test"
@@ -80,17 +90,17 @@ start_iso_vm () {
   
  
   ## Stop an old VM with the same name
-  vm_status=$(virsh list |grep $TMPNAME|awk '{print $3}')
+  vm_status=$($NEW_ENV_S virsh list $NEW_ENV_S |grep $TMPNAME|awk '{print $3}')
   if [ "$vm_status" == "running" ]; then
-    eval virsh destroy $TMPNAME $SILENCER && echo "VM " $TMPNAME " Down"
+    eval $NEW_ENV_S virsh destroy $TMPNAME $SILENCER $NEW_ENV_E && echo "VM " $TMPNAME " Down"
   fi
 
   ## Delete an old VM with the same name
-  vm_status=$(virsh list --all |grep $TMPNAME|awk '{print $3}')
+  vm_status=$($NEW_ENV_S virsh list --all $NEW_ENV_E |grep $TMPNAME|awk '{print $3}')
   if [ "$vm_status" == "shut" ]; then
     echo ">> Remove $TMPNAME and delete the associated virtual disk(s)" $MUTE
-    eval virsh undefine $TMPNAME $SILENCER
-    eval virsh vol-delete --pool default $TMPNAME.qcow2 $SILENCER && echo "VM " $TMPNAME " succesfully removed"
+    eval $NEW_ENV_S virsh undefine $TMPNAME $NEW_ENV_E $SILENCER
+    eval $NEW_ENV_S virsh vol-delete --pool default $TMPNAME.qcow2 $NEW_ENV_E $SILENCER && echo "VM " $TMPNAME " succesfully removed"
     ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
   fi
 
@@ -102,16 +112,6 @@ start_iso_vm () {
 
     echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
     eval qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 ${DISK_SIZE}G $SILENCER
-
-    # If we just installed virt-manager virsh will complain about an error connecting to the socket
-    # to avoid that, if 'virsh list' returns an error, we'll run the command on a new environment
-
-    OUT_VIRSH=$(virsh list 2>&1 |grep "error: Failed to connect socket to")
-    if [[ ! -z $OUT_VIRSH ]];then
-       NEW_ENV_S="sudo su $USER -c '"
-       NEW_ENV_E="'"
-       echo "Enter the sudo password to run the virt-install command preceded by: $NEW_ENV_S $NEW_ENV_E "
-    fi
 
 
     echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
