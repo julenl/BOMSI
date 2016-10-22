@@ -37,7 +37,8 @@ if [[ ! -z "${INST_PKGS// }" ]]; then
    fi
  
    echo "Would you like to give the sudo passwor to run the following command?"
-   read -p " sudo apt-get -y install $INST_PKGS"  -n 1 -r REPLY
+   echo "  sudo apt-get -y install $INST_PKGS"
+   read -p "Answer Y or N"  -n 1 -r REPLY
    if [[ $REPLY =~ ^[Yy]$ ]]; then
          echo ">>>> Installing $INST_PKGS"
          check_root
