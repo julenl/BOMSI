@@ -124,7 +124,6 @@ start_iso_vm () {
 
   ## Delete an old VM with the same name
   vm_status=$(virsh list --all |grep $TMPNAME|awk '{print $3}')
-  #echo "$(sudo virsh list |grep $TMPNAME)"
   if [ "$vm_status" == "shut" ]; then
     echo ">> Remove $TMPNAME and delete the associated virtual disk(s)" $MUTE
     eval virsh undefine $TMPNAME $SILENCER
