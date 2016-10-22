@@ -4,6 +4,7 @@
 export SILENCER=' &> /dev/null'
 export MUTE=''
 
+DEPENDENCIES="curl gettext genisoimage fuseiso "
 
 HELP_TEXT="""
 bomsi-iso version $BOMSI_ISO_VERSION for OpenStack release $BOMSI_ISO_RELEASE.

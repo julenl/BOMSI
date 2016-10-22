@@ -185,10 +185,6 @@ EOF
   echo " >> Compiling ISO file at: $OUT_ISO_DIR/$OUT_ISO_NAME"
   eval mkisofs -D -r -V "BOMSI_INSTALLER" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o $OUT_ISO_DIR/$OUT_ISO_NAME $OUT_DIR/files/ $SILENCER
 
-  which dumpet &>/dev/null && \
-  echo " >> Checking ISO file with dumpet" &&\
-  run_or_exit "eval dumpet -i $OUT_ISO_DIR/$OUT_ISO_NAME $SILENCER"
-
   echo " >> The ISO file has been generated"
   printf "\033[0;32m   BOMSI created successfully the ISO file $OUT_ISO_DIR/$OUT_ISO_NAME   :) \n\033[0m"
   echo " "

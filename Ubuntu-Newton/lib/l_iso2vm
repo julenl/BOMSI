@@ -54,14 +54,14 @@ start_iso_vm () {
 
   ## Make sure that the current user can use virsh properly
 
-  ## Usage: add_user_to_group USER GROUP
-  add_user_to_group () { getent group $2 |grep $1 > /dev/null || \
-  echo "We need sudo to add user to KVM group" && eval sudo usermod -a -G $2 $1 $SILENCER; }
- 
-  for GROUP_I in $KVM_GROUPS; do 
-    add_user_to_group $USER $GROUP_I
-    add_user_to_group root  $GROUP_I
-  done
+# ## Usage: add_user_to_group USER GROUP
+# add_user_to_group () { getent group $2 |grep $1 > /dev/null || \
+# echo "We need sudo to add user to KVM group" && eval sudo usermod -a -G $2 $1 $SILENCER; }
+#
+# for GROUP_I in $KVM_GROUPS; do 
+#   add_user_to_group $USER $GROUP_I
+#   add_user_to_group root  $GROUP_I
+# done
    
   ## Check that the virsh commands work
   #virsh list &> /dev/null || eval $PKG_CMD libvirt-bin $SILENCER
@@ -72,21 +72,21 @@ start_iso_vm () {
   run_or_exit "virsh list"
   run_or_exit "virt-install --version"
 
-  ## If KVM GUI is not installed, install it
-  if [[ ! $( which virt-manager) ]]
-   then 
-      echo ">> Installing all the virt-manager GUI"
-      eval $PKG_CMD virt-manager $SILENCER
-      printf "\033[0;33mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
-      echo "As a workaround we'll exectute 'su - $USER' and try the bomsi command again"
-      ## for some reason this directory has sometimes wrong permissions
-      [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || \
-      echo "We need sudo to change permissions in ~/.cache/virt-manager/" && \
-      eval sudo chown -R $USER ~/.cache/virt-manager/ $SILENCER
-      echo ">> Starting the virt-manager GUI"
-      echo "This is the first time we run virt-manager, so we'll run it with 'sudo su $USER' to make it work"
-      eval sudo su $USER -c virt-manager $SILENCER
-  fi
+# ## If KVM GUI is not installed, install it
+# if [[ ! $( which virt-manager) ]]
+#  then 
+#     echo ">> Installing all the virt-manager GUI"
+#     eval $PKG_CMD virt-manager $SILENCER
+#     printf "\033[0;33mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
+#     echo "As a workaround we'll exectute 'su - $USER' and try the bomsi command again"
+#     ## for some reason this directory has sometimes wrong permissions
+#     [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || \
+#     echo "We need sudo to change permissions in ~/.cache/virt-manager/" && \
+#     eval sudo chown -R $USER ~/.cache/virt-manager/ $SILENCER
+#     echo ">> Starting the virt-manager GUI"
+#     echo "This is the first time we run virt-manager, so we'll run it with 'sudo su $USER' to make it work"
+#     eval sudo su $USER -c virt-manager $SILENCER
+# fi
 
   # Pop-up the virt-manager GUI if we are running with X environment  
   [[ $TERM == *"xterm"* ]] && eval virt-manager $SILENCER 
@@ -107,13 +107,13 @@ start_iso_vm () {
 
   if [ -z $VIRT_NIC_MAN ]; then VIRT_NIC_MAN="network=management"; fi
   
-  ## Make sure the user has permission to create VMs
-  touch /var/lib/libvirt/images/bomsi_test_file &> /dev/null
-  [ "$?" != "0" ] && \
-  echo "WARNING: You don't have permission to write to /var/lib/libvirt/images with your current user $USER. Enter root password to change permissions on that folder." && \
-  echo "We don't have write permissions in /var/lib/libvirt/images/ as user $USER, chmod 777 in that directory"
-  eval sudo chmod 777 /var/lib/libvirt/images/ $SILENCER
-  eval rm /var/lib/libvirt/images/bomsi_test_file $SILENCER
+# ## Make sure the user has permission to create VMs
+# touch /var/lib/libvirt/images/bomsi_test_file &> /dev/null
+# [ "$?" != "0" ] && \
+# echo "WARNING: You don't have permission to write to /var/lib/libvirt/images with your current user $USER. Enter root password to change permissions on that folder." && \
+# echo "We don't have write permissions in /var/lib/libvirt/images/ as user $USER, chmod 777 in that directory"
+# eval sudo chmod 777 /var/lib/libvirt/images/ $SILENCER
+# eval rm /var/lib/libvirt/images/bomsi_test_file $SILENCER
   
  
   ## Stop an old VM with the same name
@@ -135,21 +135,21 @@ start_iso_vm () {
 
 
   ## This is to fix some bug with generating the default pool the first time
-  TOTALPOOLS=$(virsh -q pool-list)
-  TOTALVMS=$(virsh -q list --all) 
-  FILESINVAR=$(ls /var/lib/libvirt/images)
-  if [ "$TOTALPOOLS" == "" ]; then
-     echo ">> There are no predefined pools, trying a workaround..."
-     if [ "$TOTALVMS" == "" ]; then
-          if [ "$FILESINVAR" == "" ]; then
-            echo ">> There are no virsh pools, no VMs and image dir is emty."
-            echo ">> Removing /var/lib/libvirt/images/ directory."
-            eval sudo rm -rf /var/lib/libvirt/images $SILENCER
-          else
-            printf "\033[0;31m** ERROR: there are no pools defined, but there are still files on /var/lib/libvirt/images/ directory, so we cannot remove it\n\033[0m" && exit
-          fi
-     fi
-  fi
+# TOTALPOOLS=$(virsh -q pool-list)
+# TOTALVMS=$(virsh -q list --all) 
+# FILESINVAR=$(ls /var/lib/libvirt/images)
+# if [ "$TOTALPOOLS" == "" ]; then
+#    echo ">> There are no predefined pools, trying a workaround..."
+#    if [ "$TOTALVMS" == "" ]; then
+#         if [ "$FILESINVAR" == "" ]; then
+#           echo ">> There are no virsh pools, no VMs and image dir is emty."
+#           echo ">> Removing /var/lib/libvirt/images/ directory."
+#           eval sudo rm -rf /var/lib/libvirt/images $SILENCER
+#         else
+#           printf "\033[0;31m** ERROR: there are no pools defined, but there are still files on /var/lib/libvirt/images/ directory, so we cannot remove it\n\033[0m" && exit
+#         fi
+#    fi
+# fi
 
 
 
