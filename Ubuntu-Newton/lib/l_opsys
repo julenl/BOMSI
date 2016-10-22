@@ -33,16 +33,19 @@ for DEP in $DEPENDENCIES
 if [[ ! -z "${INST_PKGS// }" ]]; then
    echo "We need some dependencies to be installed in order to BOMSI to work"
    if [[ "$INST_PKGS" == *"virt-manager"* ]]; then
-       echo "WARNING: you might need to restart in order to make virt-manager work properly" 
+       echo "WARNING: you might need to restart in order to make virt-manager work properly. Or just run 'sudo su $USER' and try again." 
    fi
  
    echo "Would you like to give the sudo passwor to run the following command?"
    echo "  sudo apt-get -y install $INST_PKGS"
-   read -p "Answer Y or N"  -n 1 -r REPLY
+   read -p "Answer Y or N: "  -n 1 -r REPLY
+   echo
    if [[ $REPLY =~ ^[Yy]$ ]]; then
          echo ">>>> Installing $INST_PKGS"
-         check_root
          eval sudo apt-get -y install $INST_PKGS &> /tmp/bomsi_install.log $SILENCER
+   elif [[ $REPLY =~ ^[Nn]$ ]]; then
+         echo "We can't continue without the dependencies. Exiting..."
+         exit
    fi
 fi
 
