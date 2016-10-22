@@ -22,23 +22,13 @@ for DEP in $DEPENDENCIES
   do
     if ! pkg_installed $DEP &> /dev/null; then
       INST_PKGS+=" $DEP"
-
-      echo "The package $DEP is not installed. Do you want to run"
-      echo "  sudo apt-get -y install $DEP"
-      echo "from here? [Y/n]"
-  
-      read -p "Do you want to install $DEP? " -n 1 -r REPLY
-      echo
-      if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo ">>>> Installing $DEP"
-            check_root
-            update_pkg_cache
-            install_pkg $DEP&> /tmp/bomsi_install.log
-      fi
     else
       eval echo "   $DEP is already installed" $SILENCER
     fi
   done
+
+
+# Install all dependencies at once
 
 if [[ ! -z "${INST_PKGS// }" ]]; then
    echo "We need some dependencies to be installed in order to BOMSI to work"
