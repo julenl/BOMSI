@@ -4,7 +4,7 @@
 ## based machine (mostly tested with Ubuntu). If some dependency is missing, it will
 ## update the package database and install the missing package(s)
 
-if [ ! -z $INSTALL_VM ];then
+if [ -z $INSTALL_VM ];then
     DEPENDENCIES+="qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system virt-manager "
 fi
 
