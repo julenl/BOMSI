@@ -52,41 +52,12 @@ start_iso_vm () {
   #set -e
   #set -x
 
-  ## Make sure that the current user can use virsh properly
-
-# ## Usage: add_user_to_group USER GROUP
-# add_user_to_group () { getent group $2 |grep $1 > /dev/null || \
-# echo "We need sudo to add user to KVM group" && eval sudo usermod -a -G $2 $1 $SILENCER; }
-#
-# for GROUP_I in $KVM_GROUPS; do 
-#   add_user_to_group $USER $GROUP_I
-#   add_user_to_group root  $GROUP_I
-# done
-   
-  ## Check that the virsh commands work
-  #virsh list &> /dev/null || eval $PKG_CMD libvirt-bin $SILENCER
-
   
   virsh list &> /dev/null || echo "ERROR: If 'virsh list' does not work, it's probably because you just installed libvirt. Try to restart/relog-in." 
 
   run_or_exit "virsh list"
   run_or_exit "virt-install --version"
 
-# ## If KVM GUI is not installed, install it
-# if [[ ! $( which virt-manager) ]]
-#  then 
-#     echo ">> Installing all the virt-manager GUI"
-#     eval $PKG_CMD virt-manager $SILENCER
-#     printf "\033[0;33mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
-#     echo "As a workaround we'll exectute 'su - $USER' and try the bomsi command again"
-#     ## for some reason this directory has sometimes wrong permissions
-#     [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || \
-#     echo "We need sudo to change permissions in ~/.cache/virt-manager/" && \
-#     eval sudo chown -R $USER ~/.cache/virt-manager/ $SILENCER
-#     echo ">> Starting the virt-manager GUI"
-#     echo "This is the first time we run virt-manager, so we'll run it with 'sudo su $USER' to make it work"
-#     eval sudo su $USER -c virt-manager $SILENCER
-# fi
 
   # Pop-up the virt-manager GUI if we are running with X environment  
   [[ $TERM == *"xterm"* ]] && eval virt-manager $SILENCER 
@@ -107,14 +78,6 @@ start_iso_vm () {
 
   if [ -z $VIRT_NIC_MAN ]; then VIRT_NIC_MAN="network=management"; fi
   
-# ## Make sure the user has permission to create VMs
-# touch /var/lib/libvirt/images/bomsi_test_file &> /dev/null
-# [ "$?" != "0" ] && \
-# echo "WARNING: You don't have permission to write to /var/lib/libvirt/images with your current user $USER. Enter root password to change permissions on that folder." && \
-# echo "We don't have write permissions in /var/lib/libvirt/images/ as user $USER, chmod 777 in that directory"
-# eval sudo chmod 777 /var/lib/libvirt/images/ $SILENCER
-# eval rm /var/lib/libvirt/images/bomsi_test_file $SILENCER
-  
  
   ## Stop an old VM with the same name
   vm_status=$(virsh list |grep $TMPNAME|awk '{print $3}')
@@ -134,36 +97,30 @@ start_iso_vm () {
   eval ls /var/lib/libvirt/images/$TMPNAME.img $SILENCER && eval rm -f /var/lib/libvirt/images/$TMPNAME.img $SILENCER
 
 
-  ## This is to fix some bug with generating the default pool the first time
-# TOTALPOOLS=$(virsh -q pool-list)
-# TOTALVMS=$(virsh -q list --all) 
-# FILESINVAR=$(ls /var/lib/libvirt/images)
-# if [ "$TOTALPOOLS" == "" ]; then
-#    echo ">> There are no predefined pools, trying a workaround..."
-#    if [ "$TOTALVMS" == "" ]; then
-#         if [ "$FILESINVAR" == "" ]; then
-#           echo ">> There are no virsh pools, no VMs and image dir is emty."
-#           echo ">> Removing /var/lib/libvirt/images/ directory."
-#           eval sudo rm -rf /var/lib/libvirt/images $SILENCER
-#         else
-#           printf "\033[0;31m** ERROR: there are no pools defined, but there are still files on /var/lib/libvirt/images/ directory, so we cannot remove it\n\033[0m" && exit
-#         fi
-#    fi
-# fi
 
 
 
+    echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
+    eval qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 ${DISK_SIZE}G $SILENCER
+
+    # If we just installed virt-manager virsh will complain about an error connecting to the socket
+    # to avoid that, if 'virsh list' returns an error, we'll run the command on a new environment
+
+    OUT_VIRSH=$(virsh list 2>&1 |grep "error: Failed to connect socket to")
+    if [[ ! -z $OUT_VIRSH ]];then
+       NEW_ENV_S="sudo su $USER -c '"
+       NEW_ENV_E="'"
+       echo "Enter the sudo password to run the virt-install command preceded by: $NEW_ENV_S $NEW_ENV_E "
+    fi
 
 
-  echo ">> Creating an emty file as a virtual disk as $TMPNAME.img with $DS Gb size"
-  eval qemu-img create -f qcow2 /var/lib/libvirt/images/$TMPNAME.qcow2 ${DISK_SIZE}G $SILENCER
+    echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
 
-  echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
-  
+    CMD="$NEW_ENV_S virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole --wait=-1 -c ~/$OUT_ISO_NAME --force $SILENCER $NEW_ENV_E"
     echo ">> Using command:"
-    printf """\033[0;34m eval virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole --wait=-1 -c ~/$OUT_ISO_NAME --force $SILENCER \n\033[0m"""
+    printf """\033[0;34m eval $CMD \n\033[0m"""
 
- eval virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole --wait=-1 -c ~/$OUT_ISO_NAME --force $SILENCER
+    eval $CMD
 
 }
 
@@ -177,10 +134,11 @@ else
   start_iso_vm 
 fi
 
-#run_or_exit "sudo su $USER -c 'virsh list' | grep $VM_NAME"
 
+T_CMD="$NEW_ENV_S virsh list $NEW_ENV_E"
+run_or_exit "eval $T_CMD"
 
-run_or_exit "echo \"virsh list | grep $VM_NAME\" |bash "
+#run_or_exit "echo \"virsh list | grep $VM_NAME\" |bash "
 printf "\033[0;32m   BOMSI started successfully the VM $VM_NAME   :) \n\033[0m" 
 
 
