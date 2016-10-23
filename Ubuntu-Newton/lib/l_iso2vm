@@ -122,25 +122,33 @@ if [ -z ${INSTALL_VM+x} ]; then
   echo ">> Not starting VM."
 else
 
+    echo ">> Starting VM with the ISO"
+
     # If we just installed virt-manager virsh will complain about an error connecting to the socket
     # to avoid that, if 'virsh list' returns an error, we'll run the command on a new environment
 
     OUT_VIRSH=$(virsh list 2>&1 |grep "error: Failed to connect socket to")
-    if [[ ! -z $OUT_VIRSH ]];then
-       NEW_ENV_S="sudo su $USER -c '"
-       NEW_ENV_E="'"
-       echo "Enter the sudo password to run the virt-install command preceded by: $NEW_ENV_S $NEW_ENV_E "
+    if [[ -z $OUT_VIRSH ]];then
+        $NEW_ENV_S $NEW_ENV_Q start_iso_vm $NEW_ENV_Q 
+    else
+      # The user is still not in the KVM groups
+      echo "ERROR: starting VMs without belonging to the KVM group is still not supported."
+      echo "       A quick fix is to reboot or re-log in."
+      echo "exiting..."
+      exit
+      #   echo "Using sudo rights to run: sudo -Eu $USER 'start_iso_vm'"
+      #   set -a
+      #   export -f start_iso_vm
+      #   export -f gen_vnet
+      #   sudo -Eu $USER bash -c 'start_iso_vm'
     fi
 
-    run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
-    echo ">> Starting VM with the ISO"
-    #. $THISD/lib/start_iso_vm 
-    $NEW_ENV_S start_iso_vm $NEW_ENV_E 
+    #run_or_exit "[ -f  $OUT_ISO_DIR/$OUT_ISO_NAME ]"
 fi
 
 
-T_CMD="$NEW_ENV_S virsh list $NEW_ENV_E"
-run_or_exit "eval $T_CMD"
+#T_CMD="$NEW_ENV_S virsh list $NEW_ENV_E"
+#run_or_exit "$T_CMD"
 
 #run_or_exit "echo \"virsh list | grep $VM_NAME\" |bash "
 printf "\033[0;32m   BOMSI started successfully the VM $VM_NAME   :) \n\033[0m" 
