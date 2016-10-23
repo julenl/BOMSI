@@ -13,7 +13,7 @@ fi
 gen_vnet () {
   ## Creates a virtual network if not already present, and if subnet not already in use
   ## Usage: gen_vnet NAME NET virbr"N" (i.e. virbr1: gen_vnet management 10.0.0.1 1)
-if [[ ! $($NEW_ENV_S virsh net-list $NEW_ENV_E|grep $1) ]]; then
+	if [[ ! $($NEW_ENV_S virsh net-list $NEW_ENV_E | grep $1) ]]; then
 echo ">> Generating virtual network: " $1 " with gateway on " $2
 
   ## Make sure that the subnet is not used by another bridge
@@ -116,7 +116,7 @@ start_iso_vm () {
 
     echo ">> Starting a Virtual Machine using the ISO $OUT_ISO_DIR/$OUT_ISO_NAME"
 
-    CMD="$NEW_ENV_S virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole --wait=-1 -c ~/$OUT_ISO_NAME --force $SILENCER $NEW_ENV_E"
+    CMD="$NEW_ENV_S virt-install -n "$TMPNAME" --cpu host --vcpus $VCPUS -r $VRAM --os-type=linux --disk /var/lib/libvirt/images/${TMPNAME}.qcow2,device=disk,bus=virtio,size=10,sparse=true,format=qcow2 --network ${VIRT_NIC_MAN},model=virtio --network network=ext-net,model=virtio --vnc --noautoconsole --wait=-1 -c ~/$OUT_ISO_NAME --force $NEW_ENV_E $SILENCER"
     echo ">> Using command:"
     printf """\033[0;34m eval $CMD \n\033[0m"""
 

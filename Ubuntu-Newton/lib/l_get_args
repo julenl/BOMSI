@@ -116,6 +116,7 @@ do
       ;;
       -V|--verbose)
         export SILENCER=''
+        set -x
         shift
       ;;
       -Q|--quiet)
