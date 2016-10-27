@@ -1,10 +1,13 @@
 
 # BOMSI for Ubuntu 16.04 and OpenStack Newton
 
-!!! Note: This installer is neither production-ready nor enterprise-grade. It is just a personal "hobby" project without any guarantee, which I write for myself. If you use it and it helps you, I'll be happy to hear something back. If it doesn't work for you, please let me know and I'll try to fix it.
+BOMSI installs OpenStack following the official install guides step by step. It generates custom ISO images containing BASH scripts for each node, which will take care of installing and setting up all the core services.
+
+> Note: This installer is neither production-ready nor enterprise-grade. It is just a personal "hobby" project without any guarantee, which I write for myself. If you use it and it helps you, I'll be happy to hear something back. If it doesn't work for you, please let me know and I'll try to fix it.
+
 ## Short introduction
 Watch a short video of me talking about this release of BOMSI at the OpenStack Summit in Barcelona (26.10.2016)
-[![Video about BOMSI at the Summit in Barcelona](https://www.youtube.com/watch?v=NC9owNXhQO0)](https://www.youtube.com/watch?v=NC9owNXhQO0)
+[![Video about BOMSI at the Summit in Barcelona](https://i.ytimg.com/vi/NC9owNXhQO0/hqdefault.jpg?custom=true&w=196&h=110&stc=true&jpg444=true&jpgq=90&sp=68&sigh=G5R0Q2bEC_8iEejWSQtsIF9p3bc)](https://www.youtube.com/watch?v=NC9owNXhQO0)
 
 ## How to use it:
 1. Make sure you have git installed:
