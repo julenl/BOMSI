@@ -1,0 +1,66 @@
+#! /bin/bash
+
+nova_extras () {
+  . ~/admin-openrc.sh
+  . /root/bomsi/lib/l_vars
+  
+ log_step ".  > Checking compute service"
+ #echo "### This should show 4 services in the controller and 1 in the compute, all up"
+ check_output 'nova service-list' 'nova-consoleauth'
+ check_output 'nova service-list' 'nova-scheduler'
+ check_output 'nova service-list' 'nova-conductor'
+ check_output 'nova service-list' 'nova-compute'
+
+
+ #echo "### This should show 5 sections"
+ check_output 'openstack catalog list' 'keystone'
+ check_output 'openstack catalog list' 'glance'
+ check_output 'openstack catalog list' 'nova'
+ check_output 'openstack catalog list' 'placement'
+ check_output 'openstack catalog list' 'neutron'
+
+ #echo "### This should show the cirros image"
+ check_output 'openstack image list' 'cirros'
+
+ echo 'If you did not see any error since "Checking compute service", everything is OK'
+
+
+ log_step ".  > Creating flavor m1.nano and adding ssh keys"
+ 
+ if [ "$(openstack flavor list |wc -l)" -lt "5" ]; then
+   openstack flavor create --id 0 --vcpus 1 --ram 64 --disk 1 m1.nano
+ fi
+
+ [ -f ~/.ssh/id_rsa ] || \
+ ssh-keygen -f ~/.ssh/id_rsa -N ''
+
+ if [ "$(openstack keypair list |wc -l)" -lt "5" ]; then
+   openstack keypair create --public-key ~/.ssh/id_rsa.pub mykey
+ fi
+
+ echo "openstack keypair list"
+ openstack keypair list
+
+ log_step ".  > Adding security group rules to ping and ssh instances"
+
+ ## For some reason I get a lot of "default" security groups
+ ## Delete them and start fresh
+
+ DELETE_GROUPS=$(openstack security group list | grep default | awk '{print $2}')
+
+ for GROUP in $DELETE_GROUPS
+   do
+     echo "Deleting security group >> " $GROUP
+     openstack security group delete $GROUP
+   done
+
+ [ $(openstack security group list | grep default | wc -l) -gt 1 ] && \
+ echo 'WARNING: there are more than one security group named "default".' \
+ echo '    The rules for ssh and ping might not work.'
+
+ openstack security group rule create --proto icmp default
+ openstack security group rule create --proto tcp --dst-port 22 default
+
+}
+
+

@@ -1,0 +1,130 @@
+#! /bin/bash
+
+launch_instance () {
+  . ~/admin-openrc.sh
+  . /root/bomsi/lib/l_vars
+
+  unset N NET_ID IMAGE_NAME FLAVOR SEC_GROUP SSH_KEY OUTPUT EXIT
+  unset INST_IP INST_HOSTNAME
+
+  log_step ".  > Launching instance in provider network"
+
+  if [ "$(openstack hypervisor list | wc -l)" -lt "5" ];then
+    echo "ERROR: There are no available hypervisors"
+    return 1
+  fi
+
+  if $(openstack network list |grep -q provider);then
+    NET_ID=$(openstack network list|grep " provider " |awk '{print $2}')
+  elif $(openstack network list |grep -q selfservice);then
+    NET_ID=$(openstack network list|grep " selfsevice " |awk '{print $2}')
+  else
+    echo "ERROR: Unable to find self-service or provider networks"
+    return 1
+  fi
+
+  if $(openstack image list |grep cirros |grep -q active); then
+    IMG_NAME=$(openstack image list |grep cirros |awk '{print $4}')
+  else
+    echo "ERROR: Unable to find cirros image"
+    return 1
+  fi
+
+  if $(openstack flavor list |grep -q m1.nano);then
+    FLAVOR=$(openstack flavor list |grep m1.nano | awk '{print $4}')
+  else
+    echo "ERROR: Unable to find flavor m1.nano"
+    return 1
+  fi
+
+  if $(openstack security group list |grep -q default);then
+    SEC_GROUP="default"
+  else
+    echo "ERROR: No security group named 'default'"
+    return 1
+  fi
+
+  if $(openstack keypair list |grep -q mykey);then
+    SSH_KEY=$(openstack keypair list |grep mykey |awk '{print $2}')
+  else
+    echo "ERROR: Unable to find ssh keypair 'mykey'"
+    return 1
+  fi
+
+  ## Remove previous instances with the same name
+  openstack server list | grep -q bomsi-test-instance && \
+  echo 'Info: there is an existent instance with the name "bomsi-test-instance". Removing it...'
+  openstack server delete bomsi-test-instance
+
+
+  echo 'Launching an instance called "bomsi-test-instance"'
+  openstack --quiet server create --flavor $FLAVOR --image $IMG_NAME --nic net-id=$NET_ID \
+  --security-group $SEC_GROUP --key-name $SSH_KEY bomsi-test-instance &> /dev/null
+
+  [ $? -eq 0 ] && echo 'Instance "bomsi-test-instance" launched successfully.' || return 1
+ 
+
+  echo "Waiting for the bomsi-test-instance to get processed"
+  while ! $(openstack server list |grep -q bomsi-test-instance);
+  do
+    printf "."
+    sleep 1
+  done
+
+  echo "The instance appears in 'openstack server list'. Checking if it runs properly..."
+
+  echo "Waiting for the instance to come up"
+  # Try to make this loop expect both RUNNING and ERROR Statuses
+  while [ -z "$EXIT" ];  do
+    OUTPUT=$(openstack server list |grep bomsi-test-instance)
+    if $(echo "$OUTPUT" |grep -q ACTIVE); then
+      EXIT="The intance is running"
+      echo "$EXIT"
+    elif $(echo "$OUTPUT" |grep -q ERROR); then
+      EXIT="ERROR: the instance has some error"
+      echo "$EXIT"
+      break
+      return 1
+    else 
+      printf "."
+      sleep 1
+    fi
+  done
+  unset EXIT
+
+  N=0
+  echo 'Waiting stablish an ssh connection to the instance instance'
+  while [ -z "$INST_HOSTNAME" ];
+  do
+    INST_IP=$(openstack server list |grep bomsi-test-instance)
+    INST_IP=$(echo $INST_IP | awk '{print $8}' | awk -F= '{print $2}')
+    sleep 1
+    printf "."
+    N=$((N+1))
+  
+    INST_HOSTNAME=$(ssh -o "StrictHostKeyChecking no" cirros@$INST_IP hostname 2> /dev/null)
+    [ "$INST_HOSTNAME" == "bomsi-test-instance" ] && \
+    echo && echo 'ssh-ing to the new instance worked! :)'
+
+    if [ "$N" -gt "20" ]; then
+      echo 'ERROR: the timeout (20s) was reached and the instance could no be accessed via ssh'
+      return 1
+    fi
+
+  done
+
+  #[ -z $INST_IP ] && echo 'ERROR: the instance does not have an IP'
+ 
+
+  #PROV_NET_ID=$(openstack network list|grep " provider " |awk '{print $2}')
+
+
+  #nova interface-attach --net-id $PROV_NET_ID bomsi-test-instance
+  #openstack server add fixed ip bomsi-test-instance provider
+
+  #openstack server ssh bomsi-test-instance
+
+  openstack server delete bomsi-test-instance
+
+}
+

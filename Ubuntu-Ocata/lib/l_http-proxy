@@ -1,0 +1,76 @@
+#! /bin/bash
+##
+## This file checks if we are using a http-proxy
+## on the local machine and tries to use the same environment
+## on the target machines
+##
+
+
+## Make sure that the output of the commands are in English
+export LC_ALL=C
+
+
+
+## Do we need a HTTP Proxy? Suggest to use the HTTP_PROXY variable if set.
+#export SET_HTTP_PROXY_ADDR="http://http-proxy.example.com:81/"
+
+if [ ! -z "$HTTP_PROXY" ]; then
+   if [[ "$SET_PROXY" != "NO" ]]; then
+      if [[ "$USE_PROXY" == *"://"* ]]; then
+          export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
+      else
+          if [ -z $ASSUME_YES ]; then
+            echo 'WARNING: A $HTTP_PROXY variable was found'
+            echo 'Do you want to use:'
+            echo "     $HTTP_PROXY"
+            read -p "as http-proxy for your environment? [Y/n] " -n 1 -r REPLY
+            echo
+          else
+            REPLY='Y'
+          fi
+
+          if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+              echo ">> Setting $HTTP_PROXY as HTTP_PROXY"
+              export SET_HTTP_PROXY_ADDR="$HTTP_PROXY"
+          fi
+      fi
+   else
+      unset SET_HTTP_PROXY_ADDR
+      echo "UNSET"
+   fi
+elif [ ! -z "$USE_PROXY" ]; then
+   export SET_HTTP_PROXY_ADDR="$USE_PROXY"
+fi
+
+## If SET_HTTP_PROXY_ADDR was set, set up the env variables
+if [ ! -z "$SET_HTTP_PROXY_ADDR" ]; then
+  . lib/t_vars
+  ENV_PROXY="""
+http_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
+https_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
+ftp_proxy=\\\"$SET_HTTP_PROXY_ADDR\\\"
+no_proxy=\\\"localhost,127.0.1.1,controller, compute1, compute2, clean, packages\\\"
+HTTP_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
+HTTPS_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
+FTP_PROXY=\\\"$SET_HTTP_PROXY_ADDR\\\"
+NO_PROXY=\\\"localhost,127.0.1.1,controller, compute1, compute2, clean,packages\\\"
+"""
+
+  PROXY_LAST_PART=$(echo "$SET_HTTP_PROXY_ADDR" |awk -F// '{print $2}')
+
+  # Triple-scape the qoutes because they are parsed twice
+  export APT_PROXY="""Acquire::http::proxy \\\"http://$PROXY_LAST_PART\\\";
+Acquire::ftp::proxy \\\"ftp://$PROXY_LAST_PART\\\";
+Acquire::https::proxy \\\"https://$PROXY_LAST_PART\\\";"""
+
+  #echo "$APT_PROXY" >> /etc/apt/apt.conf.d/95proxies
+
+fi
+
+ENV_PATH='PATH="/usr/local/sbin:/usr/local/bin/:/usr/sbin:/usr/bin:/sbin:/bin:/usr/bin:/root/bomsi/lib"'
+ENV_VAR="""$ENV_PATH
+$ENV_PROXY
+"""
+
+export ENV_VAR="$ENV_VAR"
+

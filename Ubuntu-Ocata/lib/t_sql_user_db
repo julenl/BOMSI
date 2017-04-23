@@ -1,0 +1,59 @@
+#! /bin/bash
+
+sql_user_db () {
+  ## Create a database for a given user with given password
+  ## Usage: sql_user_table USER DATABASE PASSWORD
+
+  [ -z $1 ] && echo 'ERROR: sql_user_db: User not defined.'
+  [ -z $2 ] && echo 'ERROR: sql_user_db: Database not defined.'
+  [ -z $3 ] && echo 'ERROR: sql_user_db: Password not defined.'
+
+  . /root/bomsi/lib/t_vars
+
+  mysql -u root -p$MYSQL_ROOT <<-EOF
+CREATE DATABASE $2;
+GRANT ALL PRIVILEGES ON $2.* TO '$1'@'localhost' \
+  IDENTIFIED BY '$3';
+GRANT ALL PRIVILEGES ON $2.* TO '$1'@'%' \
+  IDENTIFIED BY '$3';
+EOF
+
+  #echo "Checking if the new SQL user is correctly generated"
+
+  printf "OK: The '$1' user can access the '$2' database "
+  LH=$(mysql -u $1 -p$3 -h localhost --execute "use $1; show tables;")
+  if $LH; then
+    printf "from 'localhost' "
+  else
+    printf "ERROR: Not from localhost "
+  fi
+
+  printf "and "  
+
+  CN=$(mysql -u $1 -p$3 -h controller --execute "use $2; show tables;")
+  if $CN; then
+    printf "from 'controller' address "
+  else
+    printf " ERROR: Not from controller address!! "
+  fi
+  echo
+
+}
+
+
+sql_user_db_delete () {
+  ## Delete a user and database
+  ## Usage: sql_user_db_delete USER DATABASE
+
+  # SELECT User, Host, Password FROM mysql.user; 
+
+  mysql -u root -p$MYSQL_ROOT <<-EOF
+GRANT USAGE ON *.* TO '$1'@'localhost';
+DROP USER '$1'@'localhost';
+GRANT USAGE ON *.* TO '$1'@'%';
+DROP USER '$1'@'%';
+DROP DATABASE IF EXISTS $2;
+EOF
+
+}
+

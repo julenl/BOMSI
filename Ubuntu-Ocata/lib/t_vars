@@ -1,0 +1,98 @@
+#! /bin/bash
+##
+## This file contains the variables used by BOMSI
+## on the openstack environment
+##
+
+load_bomsi_functions () {
+    for file in /root/bomsi/lib/l_vars /root/bomsi/lib/t_*
+        do
+            ## l_vars contains a prompt
+            if [ "$file" != *"l_vars" ]; then 
+              #echo "#### Sourcing $file"
+              source $file 
+            fi
+        done
+}
+
+## Network type: PROVIDER or SELF_SERVICE
+export NET_OPT='SELF_SERVICE'
+## Root password for the system
+export ROOT_PASSWORD=1234
+export NEW_ROOT_PASSWORD=1234
+## Network Interfaces (VLANS like eth0.1 or eth0:2 also supported)
+export IFACE0=eth0
+export IFACE_EXT=eth1
+## Hostnames for different installations
+export HN_CONTROLLER='controller'
+export HN_COMPUTE1='compute1'
+export HN_COMPUTE2='compute2'
+export HN_COMPUTE3='compute3'
+export HN_ALLINONE='controller-aio'
+export HN_CLEAN='ubuntu'
+## IP prefixes for Admin, external, Tunnel and Storage networks
+export IPPR_A=10.1.0.
+export IPPR_EXT=203.1.113.
+export NETMASK="255.255.255.0"
+export GATEWAY_LN=1
+export GATEWAY=${IPPR_A}${GATEWAY_LN}
+export DNS_LN=1
+export NAMESERVER=${IPPR_A}${DNS_LN}
+## Last Digits of IPs of servers
+export IPLD_controller=11
+export IPLD_compute1=31
+export IPLD_compute2=32
+export IPLD_compute3=33
+export IPLD_allinone=${IPLD_controller}
+export IPLD_neutron=21
+export IPLD_clean=253
+export IPLD_packages=254
+## IPs of the servers
+export IP_controller=${IPPR_A}${IPLD_controller}
+export IP_compute1=${IPPR_A}${IPLD_compute1}
+export IP_compute2=${IPPR_A}${IPLD_compute2}
+export IP_compute3=${IPPR_A}${IPLD_compute3}
+export IP_allinone=${IPPR_A}${IPLD_allinone}
+export IP_clean=${IPPR_A}${IPLD_clean}
+export IP_packages=${IPPR_A}${IPLD_packages}
+
+
+## Neutron networks
+export DNS_RESOLVER=${NAMESERVER}
+
+export PROVIDER_NETWORK_CIDR=${IPPR_EXT}0/24 #Network
+export START_IP_ADDRESS=$IPPR_EXT'101'  #1st IP in range
+export END_IP_ADDRESS=$IPPR_EXT'250'  #last IP
+export PROVIDER_NETWORK_GATEWAY=${IPPR_EXT}1 
+
+export SELFSERVICE_NETWORK_CIDR="172.16.1.0/24"
+export SELFSERVICE_NETWORK_GATEWAY="172.16.1.1"
+
+
+### PASSWORDS
+export MYSQL_ROOT="Password"
+export ADMIN_PASS=${MYSQL_ROOT}
+export DEMO_PASS=${MYSQL_ROOT}
+export RABBIT_USER="admin"
+export RABBIT_PASS=${MYSQL_ROOT}
+export KEYSTONE_DB_PASSWORD=${MYSQL_ROOT}
+export KEYSTONE_REGION="RegionOne"
+export KEYSTONE_AUTH_TOKEN=${MYSQL_ROOT}
+export GLANCE_DB_PASSWORD=${MYSQL_ROOT}
+export GLANCE_PASSWORD=${MYSQL_ROOT}
+export NOVA_DB_PASSWORD=${MYSQL_ROOT}
+export NOVA_PASSWORD=${MYSQL_ROOT}
+export PLACEMENT_PASSWORD=${MYSQL_ROOT}
+export NEUTRON_DB_PASSWORD=${MYSQL_ROOT}
+export NEUTRON_PASSWORD=${MYSQL_ROOT}
+export METADATA_SECRET="METADATA_SECRET"
+export CINDER_DB_PASSWORD=${MYSQL_ROOT}
+export CINDER_PASSWORD=${MYSQL_ROOT}
+export SWIFT_PASSWORD=${MYSQL_ROOT}
+export HEAT_PASSWORD=${MYSQL_ROOT}
+export HEAT_DB_PASSWORD=${MYSQL_ROOT}
+export HEAT_DOMAIN_PASS=${MYSQL_ROOT}
+export CEILOMETER_PASSWORD=${MYSQL_ROOT}
+export CEILOMETER_DB_PASSWORD=${MYSQL_ROOT}
+export TROVE_PASSWORD=${MYSQL_ROOT}
+export TROVE_DB_PASSWORD=${MYSQL_ROOT}

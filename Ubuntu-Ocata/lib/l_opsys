@@ -1,0 +1,170 @@
+#! /usr/bin/env bash
+
+## This file tries to guess whether we are running on a Suse, CentOS or Debian/Ubuntu
+## based machine (mostly tested with Ubuntu). If some dependency is missing, it will
+## update the package database and install the missing package(s)
+
+
+OP_SYSTEM=$(cat /etc/*-release |grep '^NAME=' | cut -d '=' -f 2 | tr -d '"' | cut -d ' ' -f 1)
+
+## gettext is needed for envsubst
+
+if [[ "$OP_SYSTEM" == *'buntu'* ]]; then
+  PKG_CMD='sudo apt -y install '
+  GENERAL_PKGS='curl gettext rsync fuseiso'
+  XORRISO_INSTALL='sudo apt -y install xorriso'
+  KVM_PKGS='qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system virt-manager'
+  VIRT_INST_CMD="virt-install $HYPERVISOR_CONNECT "
+  pkg_installed () { dpkg -l $1 |grep "ii"; }
+
+elif [[ "$OP_SYSTEM" == *'Debian'* ]]; then
+  PKG_CMD='sudo apt -y install '
+  GENERAL_PKGS='curl gettext rsync'
+  FUSEISO_INSTALL='curl -O http://cdn-fastly.deb.debian.org/debian/pool/main/f/fuseiso/fuseiso_20070708-3+deb7u1_amd64.deb'
+  FUSEISO_INSTALL+=' && sudo dpkg -i fuseiso_20070708-3+deb7u1_amd64.deb'
+  XORRISO_INSTALL='sudo apt -y install xorriso'
+  KVM_PKGS='qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system virt-manager'
+  KVM_GROUPS='libvirt kvm libvirt-qemu'
+  KVM_POST_CMD='[ -z $LIBVIRT_DEFAULT_URI ] && echo "export LIBVIRT_DEFAULT_URI=qemu:///system" >> $HOME/.bashrc'
+  KVM_POST_CMD+=" >> $HOME/.bashrc && export LIBVIRT_DEFAULT_URI=qemu:///system"
+  VIRT_INST_CMD="virt-install $HYPERVISOR_CONNECT "
+  pkg_installed () { dpkg -l $1 |grep "ii"; }
+
+elif [[ "$OP_SYSTEM" == *'CentOS'* ]]; then
+  PKG_CMD='sudo yum -y install '
+  GENERAL_PKGS='curl gettext rsync fuseiso'
+  RPMFORGE_FILE='rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm'
+  RPMFORGE_URL="http://repository.it4i.cz/mirrors/repoforge/redhat/el7/en/x86_64/rpmforge/RPMS/$RPMFORGE_FILE"
+  XORRISO_INSTALL="curl -s -o /tmp/$RPMFORGE_FILE $RPMFORGE_URL "
+  XORRISO_INSTALL+=" && sudo rpm -Uvh /tmp/$RPMFORGE_FILE && sudo yum -y install xorriso"
+  KVM_PKGS='qemu-kvm libvirt bridge-utils virt-install virt-viewer virt-manager'
+  KVM_GROUPS='libvirt kvm'
+  KVM_POST_CMD='[ -z $LIBVIRT_DEFAULT_URI ] && echo "export LIBVIRT_DEFAULT_URI=qemu:///system" >> $HOME/.bashrc'
+  KVM_POST_CMD+=" >> $HOME/.bashrc && export LIBVIRT_DEFAULT_URI=qemu:///system"
+  VIRT_INST_CMD="virt-install "
+  pkg_installed () { rpm -qa $1 |grep -q $1 ; }
+
+else
+  echo 'ERROR: the detected Operating System (GNU/Linux) type was: ' $OP_SYSTEM
+  echo '    Which is unfortunately not supported.'
+  echo '    Exiting'
+  exit 1
+
+fi
+
+echo " We are going working on a $OP_SYSTEM machine"
+
+## Check if sudo works
+if ! sudo -V ;then
+  echo 'The "sudo" package is not installed (we are probably in Debian)'
+  echo 'Installing "sudo" with:'
+  CMD="su -c '${PKG_CMD/sudo/} sudo'"
+  echo "${CMD}"
+  eval "${CMD}"
+fi
+
+## Checking if "sudo" works for the current user, otherwise add to sudoers
+if ! $(sudo -v);then
+  VISUDO_LINE="$USER    ALL=(ALL:ALL) NOPASSWD:ALL"
+  su -c "echo \"${VISUDO_LINE}\" >> /etc/sudoers"
+fi
+
+
+DEPENDENCIES="${GENERAL_PKGS} "
+
+if [ -z $INSTALL_VM ];then
+    DEPENDENCIES+=" ${KVM_PKGS}"
+    eval "$KVM_POST_CMD"
+fi
+
+echo "These are all the dependencies needed to run BOMSI:"
+echo " ${DEPENDENCIES} xorriso"
+
+
+
+## Make sure all the packages are installed
+INST_PKGS="" # Not installed packages
+
+for DEP in $DEPENDENCIES
+  do
+    if ! pkg_installed $DEP &> /dev/null; then
+      INST_PKGS+=" $DEP"
+    else
+      eval echo "   $DEP is already installed" $SILENCER
+    fi
+  done
+
+[ ! -z "${INST_PKGS// }" ] && \
+printf "\033[0;33m We will need to install he following packages: \n $INST_PKGS \n\033[0m"
+
+# Install all dependencies at once
+
+if ! $(xorriso --version &> /dev/null); then
+  printf "\033[0;33m Oh! and we will have to install 'xorriso' too, for building the ISO \n\033[0m"
+  [ -z ${INST_PKGS// } ] && INST_PKGS='curl'
+  INST_PKGS+=" && $XORRISO_INSTALL"
+fi
+
+if [[ ! -z "${INST_PKGS// }" ]]; then
+   echo "We need some dependencies to be installed in order to BOMSI to work"
+   if [[ "$INST_PKGS" == *"virt-manager"* ]]; then
+       echo "WARNING: you might need to restart in order to make virt-manager work properly. Or just run 'sudo su $USER' and try again." 
+   fi
+ 
+   echo "Would you like to give the sudo password to run the following command?"
+   printf "\033[0;33m  $PKG_CMD ${INST_PKGS} \n\033[0m"
+   read -p "Answer Y or N: "  -n 1 -r REPLY
+   echo
+   if [[ $REPLY =~ ^[Yy]$ ]]; then
+         echo ">>>> Installing $INST_PKGS"
+         eval ${PKG_CMD} "$INST_PKGS " &> /tmp/bomsi_install.log $SILENCER
+   elif [[ $REPLY =~ ^[Nn]$ ]]; then
+         echo "We can't continue without solving the dependencies. Exiting..."
+         exit
+   fi
+fi
+
+if ! $(fuseiso -h &> /dev/null); then
+  printf "\033[0;33m Oh! and we will have to install also an old 'fuseiso' package for Debian \n\033[0m"
+  eval " ${FUSEISO_INSTALL}"
+fi
+
+if ! $(xorriso --version &> /dev/null);then 
+  echo 'ERROR: xorriso is not installed. Maybe curl did not work. Check the http-proxy.'
+  exit 1
+fi
+
+# If we are installing virt-manager we have to configure it too
+if [[ "$INST_PKGS" == *"virt-manager"* ]]; then
+  ## Make sure that the current user can use virsh properly
+
+  ## Usage: add_user_to_group USER GROUP
+  add_user_to_group () { getent group $2 |grep $1 > /dev/null || \
+  echo "We need sudo to add user $1 to KVM group $2" && eval sudo usermod -a -G $2 $1 $SILENCER; }
+ 
+  for GROUP_I in $KVM_GROUPS; do 
+    add_user_to_group $USER $GROUP_I
+    add_user_to_group root  $GROUP_I
+  done
+
+  printf "\033[0;33mWARNING: The virt-manager GUI might not work properly until you log again into the system. i.e.: open another terminal.\033[0m\n"
+  echo "As a workaround we'll exectute 'su - $USER' and try the bomsi command again"
+
+  ## for some reason this directory has sometimes wrong permissions
+  [ -d "~/.cache/virt-manager" ] && touch ~/.cache/virt-manager/virt-install.log || \
+  echo "We need sudo to change permissions in ~/.cache/virt-manager/" && \
+  eval sudo chown -R $USER ~/.cache/virt-manager/ $SILENCER
+  echo ">> Starting the virt-manager GUI"
+  echo "This is the first time we run virt-manager, so we'll run it with 'sudo su $USER' to make it work"
+  eval sudo su $USER -c virt-manager $SILENCER
+ 
+fi
+
+
+## Make sure the user has permission to create VMs
+if ! $(touch /var/lib/libvirt/images/bomsi_test_file); then
+  echo "WARNING: We don't have permission to write to /var/lib/libvirt/images with your current user $USER. Enter root password to change permissions on that folder. We are going to run 'sudo chmod 777 /var/lib/libvirt/images" && \
+  eval sudo chmod 777 /var/lib/libvirt/images/ $SILENCER && \
+  eval rm /var/lib/libvirt/images/bomsi_test_file $SILENCER 
+fi
+

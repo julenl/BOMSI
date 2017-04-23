@@ -1,0 +1,116 @@
+#! /usr/bin/python
+
+# susti 2
+# Substitute a value within a given section in OpenStack config files
+#
+# Usage: susti config_file section "keyword = value"
+# Example: susti /etc/nova/nova.conf keystone_authtoken "username = nova"
+import re,sys
+
+modify=False #can we change a value? True/False
+match=False #a match was found already
+
+if len(sys.argv)<4:
+  print ' ## Error: susti takes 3 arguments: susti(.py) file FIELD "keyword=value" ##'
+  sys.exit()
+
+# Name of the file to edit (1st argument)
+config_file=sys.argv[1]
+# Name of the section where the keyword is located
+section=sys.argv[2]
+# Name of section enclosed by square brackets (ini syntax)
+sec_re=r"^\["+section+r"\][ -]*"
+# Keyword to set inside the "section" section
+ksearch=sys.argv[3].split("=")[0].rstrip()
+# Value to be replaced for the keyword "ksearch"
+preplace=sys.argv[3]
+
+
+stage=0 #tells at what point was the value modified, check next line 
+stages=["0:ERROR"]
+stages.append("1:direct modification of the '"+section+"' section")
+stages.append("2:uncommenting the line with keyword '"+ksearch+"' in section '"+section+"'")
+stages.append("3:adding the new keyword '"+ksearch+"' to the '"+section+"' section")
+stages.append("4:adding a new section")
+
+
+tmpout=open("/tmp/sustilog","a")
+print>>tmpout, sys.argv[0], " is setting '"+ preplace+"' at section '"+section+"' in ", config_file
+
+new_sec_re=re.compile("^\[.*\]")
+
+if not match: #the ksearch string is in section and is not commented
+  bulk=[]
+  for line in open(config_file):
+    #print "DEBUG LINE", match, modify, line.rstrip('\n'), new_sec_re.match(line)
+    # If line contains [section], start parsing keys
+    if re.match(sec_re,line) and not modify:
+      bulk.append(line.rstrip('\n'))
+      modify=True
+    # New section reached after target section, stop parsing
+    elif new_sec_re.match(line) and modify:
+      modify=False
+      bulk.append(line.rstrip('\n'))
+    # This is the first line containing the matchng pattern in section
+    elif re.search(r"^[ -]*"+ksearch,line) and modify and not match:
+      bulk.append(preplace)
+      match=True
+      stage=1
+    #  print "set value", line.rstrip('\n')
+    # If there are more lines with same key in sec, comment them
+    elif line.startswith(ksearch) and match and modify:
+      bulk.append("###"+line.rstrip('\n'))
+    else: 
+      bulk.append(line.rstrip('\n'))
+
+modify=False
+
+
+
+if not match: #ksearch match exists but line is commented
+  bulk=[]
+  for line in open(config_file):
+    # If line contains [section], start parsing keys
+    if re.match(sec_re,line) and not modify:
+      bulk.append(line.rstrip('\n'))
+      modify=True
+    # New section reached after target section, stop parsing
+    elif new_sec_re.match(line) and modify:
+      modify=False
+      bulk.append(line.rstrip('\n'))
+    # Replace the commented line with key=value
+    elif re.search(r"^\#[ -]*"+ksearch,line) and modify:
+      bulk.append(preplace)
+      modify,match=True,True
+      stage=2
+    else: 
+      bulk.append(line.rstrip('\n'))
+
+if not match: #ksearch not found in section, appeding to section label
+  bulk=[]
+  for line in open(config_file):
+    if line.startswith("["+section+"]"):
+      bulk.append(line.rstrip('\n'))
+      bulk.append(preplace)
+      match=True
+      stage=3
+    else: 
+      bulk.append(line.rstrip('\n'))
+
+if not match: #section not found, appending section and preplace at the bottom
+  bulk=[]
+  for line in open(config_file):
+    bulk.append(line.rstrip('\n'))
+  bulk.append(" ")
+  bulk.append("["+section+"]")
+  bulk.append(preplace)
+  stage=4
+
+print "susti has set '"+ preplace+"' at section '"+section+"' in ", config_file,
+print " by ", stages[stage].split(":")[1]
+
+out=open(config_file,'w')
+for i in bulk:
+ print>>out, i
+
+  

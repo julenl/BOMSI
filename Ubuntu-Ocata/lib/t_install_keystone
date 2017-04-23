@@ -1,0 +1,151 @@
+#! /bin/bash
+
+install_keystone (){
+
+  . /root/bomsi/lib/t_vars
+  load_bomsi_functions
+
+  log_step ".   > Installing memcached"
+  apt-get -y install memcached python-memcache
+  sed -i "s/-l .*/-l $IP_controller/" /etc/memcached.conf
+  service memcached restart
+
+  ## Create the MySQL/MariaDB user for keystone
+  log_step ".   > Generating database for user keystone"
+
+  #create_sql_user keystone $KEYSTONE_DB_PASSWORD
+  sql_user_db keystone keystone $KEYSTONE_DB_PASSWORD
+
+  log_step ".   > Installing packages"
+  apt-get -y install keystone apache2 libapache2-mod-wsgi
+
+  ## Edit the config file of keystone
+  TMPF="/etc/keystone/keystone.conf"
+    susti $TMPF database  "connection=mysql+pymysql://keystone:${KEYSTONE_DB_PASSWORD}@controller/keystone"
+    susti $TMPF token "provider=fernet"
+
+
+  
+  # Populate the database
+  log_step ".   > Populate the keystone database"
+  su -s /bin/sh -c "keystone-manage db_sync" keystone
+
+  log_step ".   > Initialize Fernet key repositories:"
+  keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
+  keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+
+
+  # Check if the database and tables were generated properly
+  echo ">> Check tables in database keystone (it should give some 34 entries):"
+  mysql -u keystone -h controller -p${KEYSTONE_DB_PASSWORD} -e "show tables in keystone;"
+
+  # Bootstrap the Identity service:
+  keystone-manage bootstrap --bootstrap-password $ADMIN_PASS \
+  --bootstrap-admin-url http://controller:35357/v3/ \
+  --bootstrap-internal-url http://controller:35357/v3/ \
+  --bootstrap-public-url http://controller:5000/v3/ \
+  --bootstrap-region-id RegionOne
+
+
+  # Configure apache
+
+  log_step ".   > Configuring apache with wsgi"
+  sed -i 's/.*ServerName www.example.com:80/ServerName controller/' /etc/apache2/apache2.conf
+  grep -q ServerName /etc/apache2/apache2.conf || \
+  echo "ServerName controller" >> /etc/apache2/apache2.conf
+
+
+
+
+#   log_step ".  > rename .../sites-available/keystone.conf to .../sites-available/wsgi-keystone.conf"
+#   mv /etc/apache2/sites-available/keystone.conf \
+#     /etc/apache2/sites-available/wsgi-keystone.conf
+
+   # Enable the identity services virtual hosts
+   ln -s /etc/apache2/sites-available/keystone.conf /etc/apache2/sites-enabled
+
+
+  # We don't need the SQLite database created by default
+  # rm -f /var/lib/keystone/keystone.db
+
+
+
+
+  # Restart apache to use the new configuration
+  log_step ".   > Restarting apache"
+  #service keystone stop && echo " ## keystone was running for some reason"
+  service apache2 restart
+
+
+
+
+  log_step ".   > Generate admin/demo credential files"
+ # Create the Keystone credentials file in the home directory
+  cat > /root/admin-openrc.sh << EOF
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_NAME=admin
+export OS_USERNAME=admin
+export OS_PASSWORD=$ADMIN_PASS
+export OS_AUTH_URL=http://controller:35357/v3
+export OS_IDENTITY_API_VERSION=3
+export OS_IMAGE_API_VERSION=2
+EOF
+
+  cat > ~/demo-openrc.sh << EOF
+export OS_PROJECT_DOMAIN_NAME=Default
+export OS_USER_DOMAIN_NAME=Default
+export OS_PROJECT_NAME=demo
+export OS_USERNAME=demo
+export OS_PASSWORD=$ADMIN_PASS
+export OS_AUTH_URL=http://controller:35357/v3
+export OS_IDENTITY_API_VERSION=3
+export OS_IMAGE_API_VERSION=2
+EOF
+
+
+
+  log_step ".   > Create domain, projects, users and roles"
+  . /root/admin-openrc.sh
+
+#  log_step ".      > Create role admin"
+#    openstack role add --project admin --user admin admin
+
+  log_step ".      > Create project admin"
+    openstack project create --domain default \
+        --description "Service Project" service
+
+  log_step ".      > Create project demo"
+    openstack project create --domain default \
+        --description "Demo Project" demo
+
+  log_step ".      > Create user demo"
+    openstack user create --domain default \
+        --password "$DEMO_PASS" demo
+
+  log_step ".      > Create role demo"
+    openstack role create user
+
+  log_step ".      > Create add role demo to demo user"
+    openstack role add --project demo --user demo user
+
+
+  #Cron to purge expired tokens hourly
+#  (crontab -l -u keystone 2>&1 | grep -q token_flush) || \
+#    echo '@hourly /usr/bin/keystone-manage token_flush >/var/log/keystone/keystone-tokenflush.log 2>&1' \
+#    >> /var/spool/cron/keystone
+
+
+  echo "Checking that keystone works..."
+  if $(openstack token issue > /dev/null); then
+    echo " 'openstack token issue' worked fine"
+    openstack token issue
+  else
+    echo " ERROR: the command 'openstack token issue' did not work"
+  fi
+
+}
+
+
+
+

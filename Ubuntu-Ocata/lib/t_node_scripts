@@ -1,0 +1,311 @@
+#! /bin/bash
+
+setup_controller () {
+
+  . /root/bomsi/lib/t_vars
+  load_bomsi_functions
+    
+    log_step 'Executing setup_controller function'
+    log_step '.> Executing basic_packages'
+  basic_packages &> /tmp/00-basic_packages.log
+    log_step '.> Executing mysqld_rabbitmq'
+  mysqld_rabbitmq &> /tmp/01-setup_controller_mysql_rabbit.log
+    log_step '.> Executing install_keystone'
+  install_keystone &>  /tmp/02-setup_controller_keystone.log
+    log_step '.> Executing install_glance'
+  install_glance &>  /tmp/03-setup_controller_glance.log
+    log_step '.> Executing install_nova_controller'
+  install_nova_controller &>  /tmp/04-setup_controller_nova_controller.log
+    log_step '.> Executing install_neutron_controller'
+  install_neutron_controller &>  /tmp/05-setup_controller_neutron_controller.log
+    log_step '.> Executing install_horizon'
+  install_horizon &>  /tmp/06-setup_controller_horizon.log
+
+
+#    log_step '.> Executing install_heat'
+#  install_heat &>  /tmp/setup_controller_heat.log
+# #run_heat_stack &>  /tmp/setup_controller_heat_stack.log
+
+  #The next part is released as a child script
+  # and executed when the first nova node shows up
+    log_step '.> Generating script to wait for compute1 and execute the rest'
+  cat >/tmp/controller_finish_compute.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars 
+  load_bomsi_functions 
+  . /root/admin-openrc.sh
+  log_step 'Creating /tmp/controller_finish_compute.sh '
+  while ! nova service-list |grep nova-compute 
+    do
+      sleep 5 && log_step '.   > waiting for compute1 node'
+    done
+
+  ## This is for the cells thing
+  ## The su -s thing is not necessary anymore
+  #su -s /bin/sh -c "
+  nova-manage cell_v2 discover_hosts --verbose
+  #" nova
+  openstack hypervisor list |tee -a /tmp/A1-controller_finish_compute.log
+  
+  nova_extras |tee -a /tmp/A1-controller_finish_compute.log
+
+  log_step 'Compute service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_compute.sh'
+  chmod +x /tmp/controller_finish_compute.sh
+  nohup /tmp/controller_finish_compute.sh &
+
+  # The next child script is executed when ovs at neutron node comes up
+  log_step 'Creating /tmp/controller_finish_network.sh'
+  cat >/tmp/controller_finish_network.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars
+  load_bomsi_functions
+  . /root/admin-openrc.sh
+  COMPUTE_NAME="compute1"
+  [[ "\$HOSTNAME" == *"allinone"* ]] && COMPUTE_NAME=$HOSTNAME
+  while ! openstack network agent list | grep \$COMPUTE_NAME 
+    do
+      sleep 5 && log_step '.   > waiting for neutron setup to finish' 
+    done
+
+  create_neutron_networks |tee -a  /tmp/A2-controller_finish_network.log
+  log_step 'Network service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_network.sh'
+  chmod +x /tmp/controller_finish_network.sh
+  nohup /tmp/controller_finish_network.sh &
+      
+
+  #This will send create and execute a heat template once everything else is up
+  cat >/tmp/controller_finish_heat.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars 
+  load_bomsi_functions
+  . /root/admin-openrc.sh
+
+  log_step 'Creating /tmp/controller_finish_heat.sh '
+  while ! neutron agent-list |grep compute1 
+    do
+      sleep 10 && log_step '.   > waiting for neutron setup to finish for heat'
+    done
+  while ! nova service-list |grep nova-compute 
+    do
+      sleep 10 && log_step '.   > waiting for compute1 node for heat' 
+    done
+
+  sleep 10
+  run_heat_stack > /tmp/heat_stack.log
+
+  log_step 'Orchestation (heat) service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_heat.sh'
+  chmod +x /tmp/controller_finish_heat.sh
+  #nohup /tmp/controller_finish_heat.sh &
+  
+}
+
+
+
+
+setup_compute () {
+  ## This function requires one argument, the index of the compute node
+  ## Usage (for the first compute node): setup_compute_node "1"
+
+  . /root/bomsi/lib/t_vars
+  load_bomsi_functions
+
+    log_step 'Executing setup_compute function'
+    log_step ' > Executing basic_packages'
+  basic_packages &> /tmp/00-basic_packages.log
+
+  log_step ' > basic_packages executed, waiting for MySQL in controller' 
+  which nmap || apt-get -y install nmap 
+  while ! nmap -p 3306 controller |grep mysql |grep open; do sleep 2 && log_step '.   > waiting for MySQL in controller' ; done
+  log_step '. > MySQL ready on controller, installing nova-compute'
+
+  install_nova_node &> /tmp/01-install_nova_node.log
+    log_step '. > Nova_node installed'
+ 
+  install_nova_node_neutron &> /tmp/02-install_nova_node_neutron.log
+    log_step '. > nova_node_neutron installed' 
+
+  #The next part is released as a child script
+  # and executed when the port 8774 (nova-api) opens up in controller
+    log_step '.> Generating script to wait for nova in controller'
+  cat >/tmp/controller_finish_compute-node.sh<<EOF 
+#! /bin/bash
+  . /root/bomsi/lib/t_vars 
+  load_bomsi_functions 
+  
+  log_step 'Creating /tmp/controller_finish_compute.sh '
+  # Wait for the controller to expose the nova-api service
+  which nmap || apt-get -y install nmap 
+  #while ! nmap controller -p 8774 |grep 8774 |grep open
+
+  # If the neutron port is open, nova-api installation is finished 
+  while ! nmap controller -p 9696 |grep 9696 |grep open 
+    do
+      sleep 5 && log_step '.   > waiting for nova port (8775) in controller'
+    done
+
+ # # Better wait until the controller replies properly
+ # while ! curl -s controller:8774 |grep -q SUPPORTED
+ #   do
+ #     sleep 5 && log_step '.   > waiting for nova (controller) to reply'
+ #   done
+
+  sleep 10
+  # Restart the compute service
+  service nova-compute restart
+
+  log_step 'Compute service installation finished'
+EOF
+    log_step '.> Executing /tmp/controller_finish_compute-node.sh'
+  chmod +x /tmp/controller_finish_compute-node.sh
+  nohup /tmp/controller_finish_compute-node.sh &
+
+}
+
+setup_compute1 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; }
+setup_compute2 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; }
+setup_compute3 () { . /root/bomsi/lib/{t_vars,t_node_scripts} && setup_compute; }
+
+
+
+
+setup_allinone () {
+  ## This one is just running the controller and the compute scripts
+  ## on the same machine.
+  ## We don't need to care about the IPs, because the scripts find them on the fly
+
+  . /root/bomsi/lib/{t_vars,t_node_scripts}
+  
+  setup_controller
+
+  setup_compute
+  
+}
+
+
+
+
+
+setup_clean () {
+  ## This option just leaves a clean Ubuntu machine
+  true
+}
+
+
+setup_packages () {
+  ## This option installs a machine and tries to download all the packages
+  ## to the /root/Packages directory
+
+    . /root/bomsi/lib/t_vars
+    sed  -i 's/us.archive.ubuntu.com/archive.ubuntu.com/g' /etc/apt/sources.list
+
+    apt-get update
+    apt-get -y upgrade
+
+    # Enable intalling the latest repository
+    apt-get -y install software-properties-common 
+
+    REPO_CMD=$(grep "add-apt-repository -y" /root/bomsi/lib/t_basic_packages)
+    eval "$REPO_CMD"
+
+
+    apt-get -y dist-upgrade 
+
+
+    ## Check all files with pattern lib/t_* and parse all the packages
+    ## that are installed in all machines
+    ALL_PKGS=""
+    for file in /root/bomsi/lib/t_*;
+      do
+        echo $file
+        while read -r line || [[ -n "$line" ]]; do
+          if [[ "$line" == *"apt-get -y"* ]] || [ ! -z $READ_NEXT ]; then
+             if [[ "$line" != "#"* ]]; then
+               echo "LINE $line" 
+               PKG=$(echo "$line" | awk -F"apt-get -y install" '{print $2}')
+               PKG=$(echo "$PKG" |awk -F"&" '{print $1}' |awk -F'\' '{print $1}')
+               echo $PKG
+               [ ! -z $READ_NEXT ] && PKG=$(echo "$line")
+               ALL_PKGS+=$PKG
+               unset READ_NEXT
+               if [[ "$line" == *'\' ]]; then
+                  READ_NEXT="True"
+               fi
+            fi
+          fi
+        done < "$file"
+      done
+    echo "ALL_PKGS $ALL_PKGS"
+
+    for PKG in $ALL_PKGS;
+      do
+        apt-get -y install "$PKG"
+      done
+
+    ## Copy all cached packages to the apache dir
+    rm /var/www/html/index.html
+    cp /var/cache/apt/archives/*.deb /var/www/html/
+
+    #mkdir -p /root/Packages
+    #cp /var/cache/apt/archives/*.deb /root/Packages/
+
+
+    apt-get -y install dpkg-dev
+    cd /var/www/html/
+    dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+
+    cat > /var/www/html/Release << EOF
+Archive: xenial
+Origin: Ubuntu
+Label: BOMSI
+Architecture: amd64
+EOF
+ 
+
+    apt-get -y install rng-tools
+    sed -i 's/.*HRNGDEVICE=\/dev\/null/HRNGDEVICE=\/dev\/null/' /etc/default/rng-tools
+    /etc/init.d/rng-tools restart
+
+cat > ../gpg-options <<EOF
+     %echo Generating a basic OpenPGP key
+     Key-Type: DSA
+     Key-Length: 1024
+     Subkey-Type: ELG-E
+     Subkey-Length: 1024
+     Name-Real: BOMSI OpenStack
+     Name-Comment: OpenStack Installer
+     Name-Email: bomsi@example.com
+     Expire-Date: 0
+     Passphrase: abc
+     %pubring key.pub
+     %secring key.sec
+     # Do a commit here, so that we can later print "done" :-)
+     %commit
+     %echo done
+EOF
+
+   # https://ubuntuforums.org/showthread.php?t=182984
+   #http://superuser.com/questions/1003403/how-to-use-gpg-gen-key-in-a-script
+    gpg --batch --gen-key ../gpg-options
+    /etc/init.d/rng-tools stop
+
+    gpg --no-default-keyring --secret-keyring ./key.sec \
+       --keyring ./key.pub --list-secret-keys
+
+    export GPG_KEY=59C6E460
+    gpg -bao Release.gpg Release
+    gpg --export -a "MyGPGName" > public.key
+ 
+
+
+}
+
+
+
+
+

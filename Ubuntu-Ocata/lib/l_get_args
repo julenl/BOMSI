@@ -1,0 +1,176 @@
+#! /bin/bash
+
+##By default output of commands will be removed
+export SILENCER=' &> /dev/null'
+export MUTE=''
+
+#DEPENDENCIES="curl gettext genisoimage fuseiso xorriso "
+
+HELP_TEXT="""
+bomsi-iso version $BOMSI_ISO_VERSION for OpenStack release $BOMSI_ISO_RELEASE.
+Usage: ./bomsi OPTIONS
+
+-n, --name=VM_NAME            Name for the quemu virtual machine being created
+-y, --yes                     Assume 'yes' to chose defaults on possible prompts (i.e. http-proxy)
+-i, --install_vm              Install a virtual machine with the created iso image
+-g, --graphic                 Launch the Graphical User Interface (GUI) of BOMSI (experimental).
+-r, --root_password=Password  Root password for the kickstarted machine
+-u, --create_usb=/dev/sdb     Create a bootable pendrive on the give device with the new ISO. disables VM
+-g, --gatewayln               Last number of Gateway IP in management network (10.0.0.1 --> 1)
+-d, --dnsln                   Last number of DNS IP in management network (10.0.0.1 --> 1)
+-m, --netmask                 Netmask (def. 255.255.255.0)
+--use_internet                Allow downloading packages from internet (def. NO)
+--no_firstrun                 Do not execute the init.d script after reboot
+--virt_nic_man=\"network=management\"
+                              The name of the management network (or bridge) for VMs (i.e. \"bridge=br0\")
+-H, --hv-connect='OPT'          Connect to hypervisor:
+                                - Default: '-c qemu:///system'
+                                - External hypervisor example: '-c qemu+ssh://username@192.168.0.5/system'
+-P, --proxy[='http://proxy']  Use a HTTP-PROXY. Use '-P=NO' to ignore. (def. \$HTTP_PROXY)
+-v, --version                 Print version and exit
+-V, --verbose                 Toggle verbose mode
+-F, --force                   Force continue and remove /tmp/BOMSI_LOCK used (or left) by another run
+-Q, --quiet                   Toggle quiet mode (no output)
+-h, --help                    Print this help and exit
+
+The generated ISO files are all the same, except that they will preselect one installation type as default.
+This is the option on the boot menu that will start automatically after the timeout.
+You can also build just one image and use your keyboard to select the option.
+
+The possible options are set by parsing one of the following (sub)strings as 'name' (-n=):
+Default configurations are provided for any name (-n) containing:
+ 
+- *controller*: OpenStack controller node, from install guides
+- *compute1*, *compute2* and *compute3*: 1st, 2nd and 3rd compute nodes, from install guides
+- *allinone*: runs the controller + compute1 scripts on the same machine
+   (all OpenStack components on a single server)
+- *packages*: downloads all the packages to be installed. This can be used to build ISOs with all the packages,
+   which allow you to install everything faster and/or offline
+- *clean*: kickstarts a basic Ubuntu server installation
+
+
+Examples:
+Create an ISO image with a boot menu which allows to select which machine is going to be installed:
+./bomsi
+
+Create the previous ISO image and test it on a virtual machine called \"1.controller\":
+./bomsi -n=1.controller
+
+Create an ISO for installing the first compute node and burn it onto a bootable pendrive:
+(assuming the pendrive is inserted on the system and that it is on /dev/sdb)
+(this also starts a (diskless) qemu test machine, to test that the pendrive works fine)
+./bomsi -n=compute1 -u=/dev/sdb
+
+"""
+
+
+for i in "$@"
+do
+  case $i in
+      -n=*|--vm_name=*)
+        export VM_NAME="${i#*=}"
+        export OUT_ISO_NAME="BOMSI-$VM_NAME.iso"
+        export INSTALL_VM=' '
+        shift
+      ;;
+      -y|--yes)
+        export ASSUME_YES=true
+        shift
+      ;;
+      -i|--install_vm)
+        export INSTALL_VM=' '
+        shift
+      ;;
+      -g |--graphical)
+        echo "Launching the Graphical User Interface of BOMSI"
+        $THISD/lib/bomsi_gui.py
+        exit
+      ;;
+      -r=*|--root_password=*)
+        sustivar "ROOT_PASSWORD=${i#*=}"
+        shift
+      ;;
+      -o=*|--output_iso_name=*)
+        export OUT_ISO_NAME="${i#*=}"
+        shift
+      ;;
+      --no_firstrun)
+        export NO_FIRSTRUN=""
+        shift
+      ;;
+      --use_internet)
+        export INSTALL_FROM_INTERNET="YES"
+        shift
+      ;;
+      --virt_nic_man=*)
+        export VIRT_NIC_MAN="${i#*=}"
+        shift
+      ;;
+      -u=*|--create_usb=*)
+        export USB_DEV="${i#*=}"
+        shift
+      ;;
+      -g=*|--gatewayln=*)
+        sustivar "GATEWAY_LN=${i#*=}"
+        shift
+      ;;
+      -d=*|--dnsln=*)
+        sustivar "DNS_LN=${i#*=}"
+        shift
+      ;;
+      -H=*|--hv-connect=*)
+        export HYPERVISOR_CONNECT="${i#*=}"
+        if ! [[ "${HYPERVISOR_CONNECT}" == *'://'* ]]; then
+          echo "ERROR: your connection parameter for the hypervisor does no look good:"
+          echo " $HYPERVISOR_CONNECT"
+          echo 'Exiting, because it is most likely not going to work anyway'
+          exit 1
+        fi
+        shift
+      ;;
+      -P|--proxy)
+        export SET_PROXY="YES"
+        shift
+      ;;
+      -P=*|--proxy=*)
+        export SET_PROXY="YES"
+        export USE_PROXY="${i#*=}"
+        #Make the NO case insensitive
+        ARG="${i#*=}"
+        if [ "${ARG,,}" == "no" ]; then
+           export SET_PROXY="NO"
+           echo "${i#*=,,}" $SET_PROXY
+        fi
+        shift
+      ;;
+      -v|--version)
+        echo "$BASH_ARGV version $VERSION"
+        exit
+      ;;
+      -V|--verbose)
+        export SILENCER=''
+        set -x
+        shift
+      ;;
+      -F|--force)
+        rm /tmp/BOMSI_LOCK
+        FORCE=true
+        shift
+      ;;
+      -Q|--quiet)
+        export MUTE=' '
+        export SILENCER=' &> /dev/null '
+        shift
+      ;;
+      -h|--help|*)
+        echo "$HELP_TEXT"
+        exit
+      ;;
+  esac
+done
+
+## If -Q is used this script will return nothing
+if [ -n "$MUTE" ]; then
+  exec &>-
+fi
+

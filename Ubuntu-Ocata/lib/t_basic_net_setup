@@ -1,0 +1,38 @@
+#! /bin/bash
+
+basic_net_setup (){
+ # Usage: basic_net_setup eth0 eth1 IP
+
+. /root/bomsi/lib/t_vars
+
+sed -i 's/^PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+service sshd restart
+
+cat > /etc/network/interfaces << EOF
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+auto $1
+iface $1 inet static
+	address $3
+	netmask $NETMASK
+	network ${IPPR_A}0
+	broadcast ${IPPR_A}255
+	gateway $GATEWAY
+	# dns-* options are implemented by the resolvconf package, if installed
+	dns-nameservers ${NAMESERVER}
+
+# The public network interface
+auto $2
+iface $2 inet manual
+   up ip link set dev $2 up
+   down ip link set dev $2 down
+EOF
+
+ifup $2
+
+}
+
+

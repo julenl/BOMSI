@@ -1,0 +1,48 @@
+#! /bin/bash
+basic_packages (){
+
+ . /root/bomsi/lib/t_vars
+
+# These next lines set the server with the same locales as your host machine
+# and removes the annoying errors
+log_step ".   > Reconfigure locales"
+
+DIFF_LOCAL_LOCALES=$(cat /root/local_locales)
+[ -z "$DIFF_LOCAL_LOCALES" ] || locale-gen $DIFF_LOCAL_LOCALES &> /tmp/locale-gen.log
+#sudo dpkg-reconfigure locales
+
+# Use the ubuntu repository closest to our location instead of the US one
+sed  -i 's/us.archive.ubuntu.com/archive.ubuntu.com/g' /etc/apt/sources.list
+
+log_step ".   > Update repositories"
+apt-get update &> /tmp/apt_update.log
+
+log_step ".   > Upgrade"
+apt-get -y upgrade &> /tmp/apt_upgrade.log
+
+log_step ".   > Install crony (ntp)"
+apt-get -y install chrony &> /tmp/apt_install_chrony.log
+
+# For NON "controller" nodes, sync time with controller
+if ! [[ $HOSTNAME =~ *"controller"* ]];
+  then
+    sed -i '0,/^server/{s/^server .*/server controller iburst/}' /etc/chrony/chrony.conf
+    sed -i '/.*.debian.pool.ntp.org.*/d' /etc/chrony/chrony.conf
+    service chrony restart
+fi
+
+chronyc sources
+
+log_step ".   > Adding the OpenStack repositories"
+# Add repository
+apt-get -y install software-properties-common
+add-apt-repository -y cloud-archive:ocata
+
+# Update
+apt-get -y update &> /tmp/basic_packages_apt_update
+apt-get -y dist-upgrade &> /tmp/basic_packages_apt_upgrade
+apt-get -y install python-openstackclient &> /tmp/basic_packages_apt_osclient
+
+}
+
+

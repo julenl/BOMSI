@@ -1,0 +1,101 @@
+#! /bin/bash
+
+create_neutron_networks () {
+
+ . /root/bomsi/lib/t_vars
+ . ~/admin-openrc.sh
+
+    log_step ".  > Creating provider virtual network"
+
+    openstack network create --share  --provider-physical-network provider \
+    --provider-network-type flat provider
+
+
+    openstack subnet create --network provider  \
+    --allocation-pool start="$START_IP_ADDRESS,end=$END_IP_ADDRESS" \
+    --dns-nameserver "$DNS_RESOLVER" --gateway "$PROVIDER_NETWORK_GATEWAY" \
+    --subnet-range "$PROVIDER_NETWORK_CIDR" provider
+
+
+
+  if [ "$NET_OPT" == "PROVIDER" ]; then
+    true
+  else
+
+    log_step ".  > Creating self-service virtual network"
+
+    . ~/demo-openrc.sh
+    openstack network create selfservice
+
+    sleep 1
+
+    openstack subnet create --network selfservice \
+    --dns-nameserver "$DNS_RESOLVER" --gateway "$SELFSERVICE_NETWORK_GATEWAY" \
+    --subnet-range "$SELFSERVICE_NETWORK_CIDR" selfservice
+
+    sleep 3
+
+    . ~/admin-openrc.sh
+    neutron net-update provider --router:external
+    
+    . ~/demo-openrc.sh
+    openstack router create router
+    sleep 3
+
+    neutron router-interface-add router selfservice
+    neutron router-gateway-set router provider
+    . ~/admin-openrc.sh
+
+  fi
+
+## Delete everything
+# neutron router-gateway-clear router ; neutron router-interface-delete router selfservice ; neutron router-delete router ; neutron net-delete provider ; neutron net-delete selfservice
+
+
+# neutron router-gateway-clear router && neutron router-interface-delete router private && neutron router-delete router && neutron net-delete private && neutron net-delete public
+
+
+
+  
+  #echo "### This should show 5 entries"
+  #neutron agent-list
+
+  
+
+ sleep 3 ## Give some time to finish creating the routers
+
+ echo "Check that l3-agent created the networks properly"
+ QROUTER=$(ip netns | grep qrouter- |awk '{print $1}')
+ ip netns exec $QROUTER ip addr list
+ echo "Ping Gateway of the external network"
+ ip netns exec $QROUTER ping -c3 $START_IP_ADDRESS
+
+ neutron port-list
+ #neutron port-show #ID
+
+ QROUTER=$(ip netns | grep qrouter- |awk '{print $1}')
+ ip netns exec $QROUTER ip a
+
+ for IDHCP in $(ip netns | grep qdhcp- |awk '{print $1}')
+  do 
+    ip netns exec $IDHCP ip a
+    echo "  "
+  done
+
+
+ #To delete them
+ #dhcp_delete_namespaces
+ #dhcp_delete_namespaces
+
+
+ # To launch an instance
+ #NET_ID=$(openstack network list |grep selfservice |awk '{print $2}')
+
+ #openstack server create --flavor m1.nano --image cirros  --nic net-id=$NET_ID --security-group default --key-name mykey selfservice-instance 
+
+ # The old way
+ #nova boot --flavor m1.nano --image cirros --nic net-id=$NET_ID --security-group default --key-name mykey private-instance
+
+}
+
+

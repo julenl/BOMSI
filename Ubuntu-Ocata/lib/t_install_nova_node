@@ -1,0 +1,82 @@
+#! /bin/bash
+
+install_nova_node (){
+
+ . /root/bomsi/lib/t_vars
+ load_bomsi_functions
+
+  # Install Packages
+  apt-get -y install nova-compute 
+  #sysfsutils
+
+
+  TMPF="/etc/nova/nova.conf"
+
+  #rabbit_parameters $TMPF
+  susti $TMPF DEFAULT "enabled_apis = osapi_compute,metadata"
+  susti $TMPF DEFAULT "transport_url = rabbit://openstack:${RABBIT_PASS}@controller"
+  #susti $TMPF DEFAULT "rpc_backend = rabbit"
+  #susti $TMPF oslo_messaging_rabbit "rabbit_host = controller"
+  #susti $TMPF oslo_messaging_rabbit "rabbit_userid = openstack"
+  #susti $TMPF oslo_messaging_rabbit "rabbit_password = ${RABBIT_PASS}"
+
+  susti $TMPF api "auth_strategy = keystone"
+  susti $TMPF keystone_authtoken "auth_uri = http://controller:5000"
+  susti $TMPF keystone_authtoken "auth_url = http://controller:35357"
+  susti $TMPF keystone_authtoken "memcached_servers = controller:11211"
+  susti $TMPF keystone_authtoken "auth_type = password"
+  susti $TMPF keystone_authtoken "project_domain_name = default"
+  susti $TMPF keystone_authtoken "user_domain_name = default"
+  susti $TMPF keystone_authtoken "project_name = service"
+  susti $TMPF keystone_authtoken "username = nova"
+  susti $TMPF keystone_authtoken "password = $NOVA_PASSWORD"
+
+  MY_MGM_IP=$(ip addr show "$IFACE0" | grep inet | head -n 1 | awk '{print $2}' | cut -d/ -f1 | grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$')
+
+  susti $TMPF DEFAULT "my_ip = $MY_MGM_IP"
+
+  susti $TMPF DEFAULT "use_neutron = True"
+  susti $TMPF DEFAULT "firewall_driver = nova.virt.firewall.NoopFirewallDriver" 
+  
+  
+
+  #susti $TMPF DEFAULT "network_api_class = nova.network.neutronv2.api.API"
+  #susti $TMPF DEFAULT "security_group_api = neutron"
+  #susti $TMPF DEFAULT "linuxnet_interface_driver = nova.network.linux_net.NeutronLinuxBridgeInterfaceDriver"
+
+  susti $TMPF vnc "vnc_enabled = True"
+  susti $TMPF vnc "vncserver_listen = 0.0.0.0"
+  susti $TMPF vnc "vncserver_proxyclient_address = \$my_ip"
+  #susti $TMPF vnc "novncproxy_base_url = http://controller:6080/vnc_auto.html"
+  susti $TMPF vnc "novncproxy_base_url = http://${IP_controller}:6080/vnc_auto.html"
+
+  susti $TMPF glance "api_servers = http://controller:9292"
+  susti $TMPF oslo_concurrency "lock_path = /var/lib/nova/tmp"
+  #susti $TMPF DEFAULT "verbose = True"
+
+  susti $TMPF placement "os_region_name = RegionOne"
+  susti $TMPF placement "project_domain_name = Default"
+  susti $TMPF placement "project_name = service"
+  susti $TMPF placement "auth_type = password"
+  susti $TMPF placement "user_domain_name = Default"
+  susti $TMPF placement "auth_url = http://controller:35357/v3"
+  susti $TMPF placement "username = placement"
+  susti $TMPF placement "password = ${PLACEMENT_PASSWORD}"
+
+
+ 
+  # Delete this line due to a Bug in packaging 
+  sed -i '/logdir/d' $TMPF
+
+  TMPF="/etc/nova/nova-compute.conf"
+  VCPUS=$(egrep -c '(vmx|svm)' /proc/cpuinfo)
+  [ "$VCPUS" == "0" ] && susti $TMPF libvirt "virt_type = qemu"
+
+  # Remove the SQLite database
+  rm -f /var/lib/nova/nova.sqlite
+
+  service nova-compute restart
+
+}
+
+

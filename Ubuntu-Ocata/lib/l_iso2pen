@@ -1,0 +1,20 @@
+#! /usr/bin/env bash
+
+if [ ! -z ${USB_DEV+x} ]; then
+  ## check if device is present
+  run_or_exit "sudo fdisk -l |grep $USB_DEV"
+  echo ">> clean the content of the pendrive"
+  eval sudo dd if=/dev/zero of=$USB_DEV bs=512 count=1 $SILENCER
+  #echo -e "o\nn\np\n1\n\n\na\n1\nw" | sudo fdisk $USB_DEV
+  echo " "
+  echo ">> COPY THE ISO FILE TO THE PENDRIVE IN $USB_DEV "
+  echo " "
+  ## check if ISO file is present
+  run_or_exit "[ -f $PATH_TO_ISO/$OUT_ISO_NAME ]"
+  eval sudo dd if=$OUT_ISO_DIR/$OUT_ISO_NAME of=$USB_DEV bs=512 $SILENCER
+  echo ">> Testing USB device"
+  eval sudo qemu-system-x86_64 -enable-kvm -m 1024 -hda $USB_DEV $SILENCER
+  unset INSTALL_VM
+fi
+
+
