@@ -101,7 +101,7 @@ gen_iso () {
  
   ## fuseiso9660 in debian always exits with error status
   ! [[ "$OP_SYSTEM" == *'Debian'* ]] && \
-  run_or_exit "${FUSEISO_PKG} -h"
+  run_or_exit 'fuseiso -h'
 
   #${FUSEISO_PKG} $PATH_TO_ISO /tmp/mountiso/
   fuseiso $PATH_TO_ISO /tmp/mountiso/
