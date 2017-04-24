@@ -55,7 +55,7 @@ fi
 echo " We are going working on a $OP_SYSTEM machine"
 
 ## Check if sudo works
-if ! sudo -V ;then
+if ! sudo -V > /dev/null ;then
   echo 'The "sudo" package is not installed (we are probably in Debian)'
   echo 'Installing "sudo" with:'
   CMD="su -c '${PKG_CMD/sudo/} sudo'"
@@ -64,7 +64,9 @@ if ! sudo -V ;then
 fi
 
 ## Checking if "sudo" works for the current user, otherwise add to sudoers
-if ! $(sudo -v);then
+RES=$(sudo -v -n 2>&1)
+if ! echo "$RES" |grep -q ' a password is required' ;then
+  echo "The user '$USER' is not allowed to use sudo. Adding $USER to sudoers"
   VISUDO_LINE="$USER    ALL=(ALL:ALL) NOPASSWD:ALL"
   su -c "echo \"${VISUDO_LINE}\" >> /etc/sudoers"
 fi
