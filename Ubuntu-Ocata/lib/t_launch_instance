@@ -53,7 +53,8 @@ launch_instance () {
 
   ## Remove previous instances with the same name
   openstack server list | grep -q bomsi-test-instance && \
-  echo 'Info: there is an existent instance with the name "bomsi-test-instance". Removing it...'
+  echo 'Info: there is an existent instance with the name "bomsi-test-instance".'\
+       ' Removing it...' && \
   openstack server delete bomsi-test-instance
 
 
