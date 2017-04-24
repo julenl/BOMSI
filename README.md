@@ -7,7 +7,7 @@ It generates an ISO file for CentOS(7) or Ubuntu(15.10) including the installati
 The bomsi-iso.sh script (the one that creates the ISOs and VMs) is supposed to run under GNU/Linux and currently it is tested on Ubuntu and SUSE.
 
 The directories are named after:
-(Operative_System)-(OpenStack_Release)
-Where Operative_System is the operative system for the server running OpenStack. 
+(Operating_System)-(OpenStack_Release)
+Where Operating_System is the operating system for the server running OpenStack. 
 
 
