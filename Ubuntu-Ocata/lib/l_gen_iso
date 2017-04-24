@@ -210,28 +210,30 @@ gen_iso () {
        export HOST_NAME=${HN_COMPUTE3}
      elif [ "$HOST" == "allinone" ]; then
        export HOST_NAME=${HN_ALLINONE}
+       AIO=${HN_ALLINONE}
      elif [ "$HOST" == "clean" ]; then
        export HOST_NAME=${HN_CLEAN}
+     else
+       export HOST_NAME=${HOST}
      fi
 
-     export HOST_NAME=${HOST}
      # This is a hack to avoid expanding the PATH variable on the ks file
      export PATHVAR='$PATH'
      envsubst < $THISD/lib/ks_template > $OUT_DIR/files/ks/ks-${HOST}.cfg
 
   done
 
+#if [ "$HOST_NAME" == *"allinone"* ] || [ "$HOST_NAME" == *"aio"* ]; then
+#  AIO="$HOST_NAME"
+#fi
 
 cat > $OUT_DIR/files/bomsi/hosts << EOF
-$IP_controller controller $HN_CONTROLLER
-$IP_compute1 compute1 $HN_COMPUTE1
-$IP_compute2 compute2 $HN_COMPUTE1
-$IP_compute3 compute3 $HN_COMPUTE1
-$IP_controller controller $HN_ALLINONE
+$IP_controller controller $AIO $HN_CONTROLLER
+$IP_compute1 compute1  $HN_COMPUTE1
+$IP_compute2 compute2  $HN_COMPUTE1
+$IP_compute3 compute3  $HN_COMPUTE1
 $IP_clean $HN_CLEAN
 $IP_packages packages
-${IPPR_A}$NEUTRON_LN network
-${IPPR_A}$CINDER_LN block
 EOF
 
 
