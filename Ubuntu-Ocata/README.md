@@ -22,29 +22,10 @@ BOMSI installs OpenStack following the official install guides step by step. It 
 Watch a short video of me talking about this release of BOMSI at the OpenStack Summit in Barcelona (26.10.2016)
 [![Video about BOMSI at the Summit in Barcelona](https://i.ytimg.com/vi/NC9owNXhQO0/hqdefault.jpg?custom=true&w=196&h=110&stc=true&jpg444=true&jpgq=90&sp=68&sigh=G5R0Q2bEC_8iEejWSQtsIF9p3bc)](https://www.youtube.com/watch?v=NC9owNXhQO0)
 
-## Install your computer manually
-BOMSI checks if the local environment (your computer) is ready to build the ISO and the virtual machine(s).
-The file `l_opsys` guesses the operating system and tryes to set up everything properly, but if you rather do it by hand, here are the instructions:
-
-- You need sudo. Debian does not set it up by default. 
-
-- Install the dependencies for building the ISO:
-
-    curl gettext rsync fuseiso xorriso
-
-  Installing fuseiso in Debian requires downloading the package and installing manually (check the `l_opsys` file). The package `xorriso` for CentOS is on the _rpmforge_ repository.
-
-- Install dependencies for KVM:
-
-    qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system virt-manager
-
-  To make sure you can create VMs as a user, ensure that your user has write access to `/var/lib/libvirt/images` directory (the script sets `777` permissions to make things easier).
-
-  Make sure the user is member of the KVM groups (i.e. libvirt, kvm  and libvirt-qemu in Debian). You might need to log out and log in again (or restart) to make it work.
-
 
 ## How to build your OpenStack virtual environmnent:
 1. Make sure you have git installed:
+
 `sudo apt-get -y install git`
 
 or in RHEL based distros
@@ -52,20 +33,23 @@ or in RHEL based distros
 `sudo yum -y install git`
 
 2. Get the code:
+
 `git clone http://github.com/julenl/BOMSI/`
 
 3. Move to the directory containing the script:
+
 `cd BOMSI/Ubunbu-Ocata/`
 
 4. Optionally you can customize the IPs and passwords
+
 `vim lib/t_vars`
 
 5. Run BOMSI
     1. Just generate an ISO file which you can use to install all the machines:
+    
     `./bomsi`
 
     your image is now on the `$OUT_ISO_DIR` (default: /var/lib/libvirt/images) defined with the other local variables in `l_vars`.
-
 
     2. Install OpenStack:
 
@@ -78,30 +62,41 @@ or in RHEL based distros
     `./bomsi -n=allinone`
 
     or in 2 separate nodes:
-    `./bomsi -n=controller`
-    `./bomsi -n=compute1`
+    
+        ./bomsi -n=controller
+        ./bomsi -n=compute1
 
     ... and, if you have a powerful computer, you can add more nodes too, if you want:
-    `./bomsi -n=compute2`
-    `./bomsi -n=compute3`
+    
+        ./bomsi -n=compute2
+        ./bomsi -n=compute3
 
 
 ## Launching an instance
 - From command line:
     - Source the local variables
-     `. lib/t_vars`
-     `. lib/l_vars`
+    
+         `. lib/t_vars`
+         `. lib/l_vars`
+         
     - connect to the controller with ssh (to use this command, make sure you have `sshpass` installed)
+    
      `controller`
 
      Now you are loged into the controller machine
 
     - Load the bomsi variables in the controller node
+    
      `. bomsi/lib/t_vars`
+     
     - Load the bomsi functions
+    
      `load_bomsi_functions`
+     
     - Launch the instance
+    
      `launch_instance`
+     
       This last command will launch an instance called `bomsi-test-instance` in the provider network
 
 - From the web browser:
@@ -125,3 +120,23 @@ or in RHEL based distros
 
     - You can now see your instance listed in **Project > Compute > Instances**. If you click on its name, you will get to the page with the instnce details. If you click on _Console_, you will get a VNC window where you can interact with your machine. As explained in the login prompt of that machine, you can log in with the user `cirros` and the password `cubswin:)`
 
+
+## Install the local environment manually
+BOMSI checks if the local environment (your computer) is ready to build the ISO and the virtual machine(s).
+The file `l_opsys` guesses the operating system and tryes to set up everything properly, but if you are using somethin else than Ubuntu, Debian or CentOS, or you rather do it by hand, here are the instructions:
+
+- You need sudo. Debian does not set it up by default. 
+
+- Install the dependencies for building the ISO:
+
+    curl gettext rsync fuseiso xorriso
+
+  > Tip: Installing fuseiso in Debian requires downloading the package and installing manually (check the `l_opsys` file). The package `xorriso` for CentOS is on the _rpmforge_ repository.
+
+- Install dependencies for KVM:
+
+    `qemu-kvm libvirt-bin bridge-utils acpid virtinst qemu-system virt-manager`
+
+  To make sure you can create VMs as a user, ensure that your user has write access to `/var/lib/libvirt/images` directory (the script sets `777` permissions to make things easier).
+
+  Make sure the user is member of the KVM groups (i.e. libvirt, kvm  and libvirt-qemu in Debian). You might need to log out and log in again (or restart) to make it work.
