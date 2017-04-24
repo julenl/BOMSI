@@ -62,11 +62,10 @@ EOF
   . /root/bomsi/lib/t_vars
   load_bomsi_functions
   . /root/admin-openrc.sh
-  COMPUTE_NAME="compute1"
-  [[ "\$HOSTNAME" == *"allinone"* ]] && COMPUTE_NAME=$HOSTNAME
-  while ! openstack network agent list | grep \$COMPUTE_NAME 
+
+  while ! openstack network agent list | grep 'L3 agent ' 
     do
-      sleep 5 && log_step '.   > waiting for neutron setup to finish' 
+      sleep 5 && log_step '.   > waiting for neutron setup to finish (L3 agent)' 
     done
 
   create_neutron_networks |tee -a  /tmp/A2-controller_finish_network.log
