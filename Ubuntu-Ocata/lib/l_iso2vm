@@ -102,7 +102,7 @@ start_iso_vm () {
     ## note to myself: for attached devices use something like virsh domblklist 1.object |grep img  
   fi
 
-  eval ls /var/lib/libvirt/images/$TMPNAME.img $SILENCER && eval rm -f /var/lib/libvirt/images/$TMPNAME.img $SILENCER
+  eval ls /var/lib/libvirt/images/$TMPNAME.qcow2 $SILENCER && eval rm_check "/var/lib/libvirt/images/$TMPNAME.qcow2" $SILENCER
 
 
 
@@ -148,7 +148,7 @@ else
     # If we just installed virt-manager virsh will complain about an error connecting to the socket
     # to avoid that, if 'virsh list' returns an error, we'll run the command on a new environment
 
-    OUT_VIRSH=$(virsh list 2>&1 |grep "error: Failed to connect socket to")
+    OUT_VIRSH=$(virsh ${HYPERVISOR_CONNECT} list 2>&1 |grep "error: Failed to connect socket to")
     if [[ -z $OUT_VIRSH ]];then
         $NEW_ENV_S $NEW_ENV_Q start_iso_vm $NEW_ENV_Q 
     else
@@ -169,7 +169,7 @@ else
     #T_CMD="$NEW_ENV_S virsh list $NEW_ENV_E"
     #run_or_exit "$T_CMD"
 
-    #run_or_exit "echo \"virsh list | grep $VM_NAME\" |bash "
+    run_or_exit "echo \"virsh list | grep $VM_NAME\" |bash "
     printf "\033[0;32m   BOMSI started successfully the VM $VM_NAME   :) \n\033[0m" 
 fi
 
