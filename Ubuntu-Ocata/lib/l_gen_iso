@@ -25,6 +25,7 @@ rm_check () {
  if [[ $FILEORDIR == "/tmp/custom_iso" ]] || \
     [[ $FILEORDIR == "/tmp/"*"/"* ]] || \
     [[ $FILEORDIR == "/tmp/BOMSI_LOCK" ]] || \
+    [[ $FILEORDIR == "/var/lib/libvirt/images/" ]] || \
     [[ $FILEORDIR == "$OUT_ISO_DIR/"*".iso" ]] || \
     [[ $FILEORDIR == "$HOME/"*"/"* ]] ; then
       rm -rf $FILEORDIR
