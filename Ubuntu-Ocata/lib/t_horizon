@@ -40,6 +40,21 @@ install_horizon () {
   echo "}" >> $TMPF
 
 
+  ## This things are not in the install guide but I personally like them
+  ## Enable password retrieve
+  sed -i 's/.*OPENSTACK_ENABLE_PASSWORD_RETRIEVE.*/OPENSTACK_ENABLE_PASSWORD_RETRIEVE = True/'  $TMPF
+
+  ## Use the default OpenStack theme instead of the Ubuntu one
+  sed -i '/AVAILABLE_THEMES =/,+4 s/^#//' $TMPF 
+
+  ## Keep the horizon session open for 24 hours
+  echo 'SESSION_TIMEOUT = 86400' >> $TMPF
+
+  ## Also change the keystone token expiration time
+  sed -i 's/#expiration = .*/expiration = 86400/'  /etc/keystone/keystone.conf
+  
+
+
   ## Hacks copied from Roger's ocata patch in training-labs
   chown www-data:www-data /var/lib/openstack-dashboard
   chown www-data:www-data /var/lib/openstack-dashboard/secret_key
